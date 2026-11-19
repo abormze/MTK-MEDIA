@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK MEDIA
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.0.0
+// @version      1.1.0
 // @description  MTK MEDIA - واجهة موبايل بدون إعلانات لموقع فاصل، تشغيل مباشر من السيرفر الأول
 // @author       MTK
 // @match        *://fasel-hd.co/*
@@ -28,6 +28,7 @@
     } catch (e) { return false; }
   };
   try { W.open = function () { return null; }; } catch (e) {}
+  try { W.alert = function () {}; W.confirm = function () { return false; }; W.prompt = function () { return null; }; } catch (e) {}
   D.addEventListener('click', (e) => {
     const a = e.target && e.target.closest && e.target.closest('a[href]');
     if (a && (a.target === '_blank' || isExternal(a.href))) {
@@ -220,7 +221,52 @@
           : h('a', { href: '#', onclick: (e) => { e.preventDefault(); openMenu(); } }, icon(ic), h('span', null, label))
     ));
     const sheet = h('div', { id: 'mtk-sheet', onclick: (e) => { if (e.target.id === 'mtk-sheet') closeSheet(); } });
-    D.body.append(header, main, nav, sheet);
+    const fsBox = h('div', { id: 'mtk-fs' });
+    D.body.append(header, main, nav, sheet, fsBox);
+
+    /* ---------- fullscreen player ---------- */
+    let fsOn = false;
+    let fsNative = false;
+    const fsClose = () => h('button', { class: 'hbtn fsx', 'aria-label': 'إغلاق', onclick: closeFS }, icon('close'));
+    const playerFrame = (src) => h('iframe', {
+      src, allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture', allowfullscreen: true, frameborder: '0', scrolling: 'no', referrerpolicy: 'origin',
+      sandbox: 'allow-scripts allow-same-origin allow-forms allow-presentation allow-orientation-lock',
+    });
+    function openFS() {
+      fsBox.textContent = '';
+      fsBox.append(h('div', { class: 'loader' }, h('i'), h('i'), h('i')), fsClose());
+      fsBox.classList.add('open');
+      D.documentElement.classList.add('fs');
+      if (fsOn) return;
+      fsOn = true;
+      try {
+        const rq = fsBox.requestFullscreen || fsBox.webkitRequestFullscreen;
+        if (!rq) return;
+        fsNative = true;
+        const p = rq.call(fsBox, { navigationUI: 'hide' });
+        const lock = () => { try { screen.orientation.lock('landscape').catch(() => {}); } catch (e) {} };
+        if (p && p.then) p.then(lock, () => { fsNative = false; }); else lock();
+      } catch (e) { fsNative = false; }
+    }
+    function playFS(src, next) {
+      if (!fsOn) return;
+      fsBox.textContent = '';
+      fsBox.append(playerFrame(src), fsClose(), next ? h('a', { class: 'fsn playfs', href: next }, 'الحلقة التالية ', icon('next')) : null);
+    }
+    function closeFS() {
+      if (!fsOn) return;
+      fsOn = false;
+      fsNative = false;
+      fsBox.classList.remove('open');
+      fsBox.textContent = '';
+      D.documentElement.classList.remove('fs');
+      try { screen.orientation.unlock(); } catch (e) {}
+      const fe = D.fullscreenElement || D.webkitFullscreenElement;
+      if (fe) { try { (D.exitFullscreen || D.webkitExitFullscreen).call(D); } catch (e) {} }
+    }
+    const onFsChange = () => { if (fsOn && fsNative && !(D.fullscreenElement || D.webkitFullscreenElement)) closeFS(); };
+    D.addEventListener('fullscreenchange', onFsChange);
+    D.addEventListener('webkitfullscreenchange', onFsChange);
 
     function closeSheet() { sheet.classList.remove('open'); sheet.textContent = ''; }
     function openMenu() {
@@ -250,7 +296,9 @@
       if (isInternal(a.href)) {
         e.preventDefault();
         closeSheet();
-        go(a.href, true);
+        const fs = a.matches('.card, .ep, .btn.big, .btn.nxt, .playfs');
+        if (fs) openFS();
+        go(a.href, true, fs);
       }
     });
     W.addEventListener('popstate', () => go(location.href, false));
@@ -275,8 +323,9 @@
       cache.set(url, res);
       return res;
     }
-    async function go(url, push) {
+    async function go(url, push, fs) {
       const token = ++navToken;
+      if (!fs) closeFS();
       const target = abs(url);
       if (push) {
         try { history.replaceState(Object.assign({}, history.state, { y: W.scrollY }), ''); } catch (e) {}
@@ -291,6 +340,7 @@
       let res;
       try { res = await load(fu); } catch (e) {
         if (token !== navToken) return;
+        closeFS();
         if (e.cf) {
           sessionStorage.setItem(NATIVE_KEY, fu);
           location.replace(fu);
@@ -301,7 +351,7 @@
         return;
       }
       if (token !== navToken) return;
-      render(res.doc, res.url);
+      render(res.doc, res.url, fs);
       const st = history.state;
       W.scrollTo(0, (!push && st && st.y) || 0);
     }
@@ -374,11 +424,12 @@
         h('div', { class: 'rhead' }, h('h3', null, g.title || 'المزيد'), g.more ? h('a', { href: g.more, 'data-spa': '' }, 'الكل') : null),
         h('div', { class: 'scroller' }, g.items.map((c) => cardEl(c))));
     }
-    function render(doc, base) {
+    function render(doc, base, fs) {
       main.textContent = '';
       const hasPlayer = !!doc.querySelector('iframe[name="player_iframe"], .signleWatch');
       const isSingle = hasPlayer || !!doc.querySelector('.singleInfo, .posterImg');
-      if (isSingle) return renderSingle(doc, base, hasPlayer);
+      if (isSingle) return renderSingle(doc, base, hasPlayer, fs);
+      closeFS();
       renderList(doc, base);
     }
     function renderList(doc, base) {
@@ -421,7 +472,7 @@
       }, { rootMargin: '600px' });
       io.observe(sentinel);
     }
-    function renderSingle(doc, base, hasPlayer) {
+    function renderSingle(doc, base, hasPlayer, fs) {
       const tEl = doc.querySelector('.singleInfo .h1, .singleInfo h1, .streamHeader .h3, h1');
       let title = '';
       if (tEl) { const c = tEl.cloneNode(true); c.querySelectorAll('.singleStar').forEach((x) => x.remove()); title = txt(c); }
@@ -430,22 +481,6 @@
       const desc = txt(doc.querySelector('.singleDesc'));
       const info = Array.from(doc.querySelectorAll('#singleList span')).map(txt).filter(Boolean).slice(0, 10);
       D.title = (title ? title + ' | ' : '') + 'MTK MEDIA';
-
-      if (hasPlayer) {
-        const src = firstServer(doc, base);
-        main.append(h('div', { class: 'player' }, src
-          ? h('iframe', { src, allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture', allowfullscreen: true, frameborder: '0', scrolling: 'no', referrerpolicy: 'origin' })
-          : h('div', { class: 'empty' }, 'ما في سيرفر مشاهدة لهالعمل')));
-      }
-
-      const head = h('div', { class: 'single' },
-        poster ? h('img', { class: 'poster', src: poster, alt: '' }) : null,
-        h('div', { class: 'sinfo' },
-          h('h1', null, title),
-          rating ? h('div', { class: 'srate' }, '★ ', h('b', null, rating), ' / 10') : null,
-          h('div', { class: 'chips' }, info.slice(0, 6).map((i) => h('span', { class: 'chip ghost' }, i.replace(/^[^:]*:\s*/, ''))))));
-      main.append(head);
-      if (desc) main.append(h('p', { class: 'desc' }, desc));
 
       const eps = Array.from(doc.querySelectorAll('#epAll a[href], .epAll a[href]'));
       const here = decodeURIComponent(new URL(base).pathname);
@@ -456,10 +491,37 @@
         if (on) curIdx = i;
         return h('a', { class: 'ep' + (on ? ' on' : ''), href, 'data-spa': '' }, txt(a).replace(/الحلقة\s*/, ''));
       });
+      const nxt = curIdx >= 0 && eps[curIdx + 1] ? abs(eps[curIdx + 1].getAttribute('href'), base) : '';
+
+      if (hasPlayer) {
+        const src = firstServer(doc, base);
+        if (src && fs) playFS(src, nxt);
+        else if (fs) closeFS();
+        main.append(h('div', { class: 'player' }, src
+          ? h('button', { class: 'tap', style: poster ? 'background-image:url("' + poster.replace(/"/g, '%22') + '")' : null, onclick: () => { openFS(); playFS(src, nxt); } }, h('span', null, icon('play')))
+          : h('div', { class: 'empty' }, 'ما في سيرفر مشاهدة لهالعمل')));
+      } else if (fs && eps.length) {
+        const tok = navToken;
+        load(abs(eps[0].getAttribute('href'), base)).then((r) => {
+          if (tok !== navToken) return;
+          const src = firstServer(r.doc, r.url);
+          const e2 = r.doc.querySelectorAll('#epAll a[href], .epAll a[href]');
+          if (src) playFS(src, e2[1] ? abs(e2[1].getAttribute('href'), r.url) : ''); else closeFS();
+        }, () => closeFS());
+      } else if (fs) closeFS();
+
+      const head = h('div', { class: 'single' },
+        poster ? h('img', { class: 'poster', src: poster, alt: '' }) : null,
+        h('div', { class: 'sinfo' },
+          h('h1', null, title),
+          rating ? h('div', { class: 'srate' }, '★ ', h('b', null, rating), ' / 10') : null,
+          h('div', { class: 'chips' }, info.slice(0, 6).map((i) => h('span', { class: 'chip ghost' }, i.replace(/^[^:]*:\s*/, ''))))));
+      main.append(head);
+      if (desc) main.append(h('p', { class: 'desc' }, desc));
+
       if (eps.length) {
-        const nxt = curIdx >= 0 && eps[curIdx + 1] ? abs(eps[curIdx + 1].getAttribute('href'), base) : '';
         if (!hasPlayer) main.append(h('a', { class: 'btn big', href: abs(eps[0].getAttribute('href'), base), 'data-spa': '' }, icon('play'), ' شغّل الحلقة الأولى'));
-        if (nxt) main.append(h('a', { class: 'btn', href: nxt, 'data-spa': '' }, 'الحلقة التالية ', icon('next')));
+        if (nxt) main.append(h('a', { class: 'btn nxt', href: nxt, 'data-spa': '' }, 'الحلقة التالية ', icon('next')));
         main.append(h('section', { class: 'row' }, h('div', { class: 'rhead' }, h('h3', null, 'الحلقات (' + eps.length + ')')), h('div', { class: 'eps' }, epLinks)));
       }
 
@@ -536,6 +598,16 @@ form input:focus{border-color:var(--acc)}
 .player{position:sticky;top:calc(56px + env(safe-area-inset-top));z-index:40;background:#000;aspect-ratio:16/9;width:100%}
 .player iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 .player .empty{color:var(--mut);height:100%;display:grid;place-items:center}
+.player .tap{position:absolute;inset:0;width:100%;height:100%;border:0;display:grid;place-items:center;background:#000 center/cover;cursor:pointer}
+.player .tap span{width:68px;height:68px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(90deg,var(--acc),#ff5e3a);color:#fff;box-shadow:0 0 0 8px rgba(0,0,0,.35)}
+.player .tap .ic{width:30px;height:30px}
+#mtk-fs{display:none;position:fixed;inset:0;z-index:2147483647;background:#000;width:100vw;height:100vh;height:100dvh}
+#mtk-fs.open{display:block}
+#mtk-fs iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+#mtk-fs .loader{height:100%;padding:0;align-items:center}
+#mtk-fs .fsx{position:absolute;top:calc(10px + env(safe-area-inset-top));left:10px;z-index:3;background:rgba(0,0,0,.55);border-radius:50%;color:#fff}
+#mtk-fs .fsn{position:absolute;top:calc(10px + env(safe-area-inset-top));right:10px;z-index:3;display:flex;align-items:center;gap:4px;background:rgba(0,0,0,.55);color:#fff;border-radius:20px;padding:8px 12px;font-size:13px;font-weight:700}
+html.fs,html.fs body{overflow:hidden!important}
 .single{display:flex;gap:12px;padding:14px}
 .poster{width:96px;aspect-ratio:2/3;object-fit:cover;border-radius:10px;flex:none}
 .sinfo{min-width:0}
