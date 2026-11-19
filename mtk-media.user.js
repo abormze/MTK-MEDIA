@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK MEDIA
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.6.0
+// @version      1.6.1
 // @description  MTK MEDIA - واجهة موبايل بدون إعلانات لموقع فاصل، تشغيل مباشر من السيرفر الأول
 // @author       MTK
 // @match        *://fasel-hd.co/*
@@ -686,6 +686,8 @@ a{color:inherit;text-decoration:none}
 form{display:flex;gap:8px}
 form input{flex:1;background:var(--card);border:1px solid var(--line);color:var(--txt);border-radius:14px;padding:12px 14px;font-size:16px;outline:none}
 form input:focus{border-color:var(--acc)}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(--acc)!important;outline-offset:2px}
+.card:focus-visible{transform:scale(1.06);z-index:2}
 .sbtn{background:var(--acc);border:0;color:#fff;border-radius:14px;width:50px;display:grid;place-items:center}
 .row{margin:16px 0 4px}
 .rhead{display:flex;justify-content:space-between;align-items:center;padding:0 14px;margin-bottom:10px}
