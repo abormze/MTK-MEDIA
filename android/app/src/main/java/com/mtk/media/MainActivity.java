@@ -41,7 +41,7 @@ public class MainActivity extends Activity {
     private static final String HOME = "https://www.fasel-hd.co/mobile";
     private static final String SCRIPT_URL = "https://abormze.github.io/MTK-MEDIA/mtk-media.user.js";
     private static final Pattern AD_HOSTS = Pattern.compile(
-            "(doubleclick|googlesyndication|googleadservices|googletagservices|adservice|adnxs|popads|popcash|propellerads|"
+            "(madurird|acscdn|aclib|cchud|d23uh58cc2jksn|adcash|doubleclick|googlesyndication|googleadservices|googletagservices|adservice|adnxs|popads|popcash|propellerads|"
             + "adsterra|exoclick|juicyads|hilltopads|onclicka|onclickads|monetag|a-ads|adcash|clickadu|trafficjunky|mgid|"
             + "taboola|outbrain|revcontent|admaven|ad-maven|richpush|pushhouse|realsrv|profitabledisplay|highperformanceformat|"
             + "effectivegatecpm|displayvertising|toprevenuegate|adskeeper|zeydoo|galaksion|popunder|pushame|onesignal|"

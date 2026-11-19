@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK MEDIA
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.5.0
+// @version      1.6.0
 // @description  MTK MEDIA - واجهة موبايل بدون إعلانات لموقع فاصل، تشغيل مباشر من السيرفر الأول
 // @author       MTK
 // @match        *://fasel-hd.co/*
@@ -72,6 +72,47 @@ function MTK() {
   /* ============================== PLAYER ============================== */
   function playerMode() {
     const AD_RE = /(doubleclick|googlesyndication|adservice|popads|popcash|propeller|adsterra|onclick|exoclick|juicyads|hilltopads|\/ads?\/|banner|vast)/i;
+    const AD_TXT = /(aclib|zoneId|runPop|runAutoTag|runInterstitial|runBanner|madurird|acscdn|cchud|popunder|popMagic|adsbygoogle|adcash|monetag|VPN Toggle)/i;
+    const OK_HOST = /(^|\.)(fasel[a-z0-9-]*\.[a-z.]+|scdns\.io|jwplayer\.com|jwpcdn\.com|jsdelivr\.net|cdnjs\.cloudflare\.com|unpkg\.com|googleapis\.com|gstatic\.com|jquery\.com|bootstrapcdn\.com|cloudflare\.com|hlsjs\.video-dev\.org|videojs\.com|plyr\.io)$/i;
+    const badScript = (el) => {
+      if (!el || el.nodeName !== 'SCRIPT') return false;
+      const src = el.getAttribute('src');
+      if (src) {
+        try {
+          const u = new URL(src, location.href);
+          if (u.protocol === 'data:' || u.protocol === 'blob:') return AD_TXT.test(decodeURIComponent(u.href));
+          return AD_RE.test(u.href) || AD_TXT.test(u.href) || (u.hostname !== location.hostname && !OK_HOST.test(u.hostname));
+        } catch (e) { return true; }
+      }
+      const t = el.textContent || '';
+      return AD_TXT.test(t) && !/jwplayer|\.setup\(|sources|m3u8|\.mp4|hls|videojs|clappr|plyr/i.test(t);
+    };
+    const kill = (el) => { try { el.type = 'javascript/blocked'; el.removeAttribute('src'); el.textContent = ''; el.remove(); } catch (e) {} };
+    try {
+      const NP = Node.prototype;
+      ['appendChild', 'insertBefore', 'replaceChild'].forEach((m) => {
+        const o = NP[m];
+        NP[m] = function (n) {
+          if (n && n.nodeName === 'SCRIPT' && badScript(n)) return n;
+          if (n && n.nodeType === 11) n.querySelectorAll && n.querySelectorAll('script').forEach((x) => { if (badScript(x)) x.remove(); });
+          return o.apply(this, arguments);
+        };
+      });
+      const EP = Element.prototype;
+      ['append', 'prepend', 'after', 'before', 'replaceWith'].forEach((m) => {
+        const o = EP[m];
+        if (!o) return;
+        EP[m] = function (...a) { return o.apply(this, a.filter((n) => !(n && n.nodeName === 'SCRIPT' && badScript(n)))); };
+      });
+    } catch (e) {}
+    try {
+      new MutationObserver((ms) => {
+        for (const m of ms) for (const n of m.addedNodes) {
+          if (n.nodeName === 'SCRIPT') { if (badScript(n)) kill(n); }
+          else if (n.querySelectorAll) n.querySelectorAll('script').forEach((x) => { if (badScript(x)) kill(x); });
+        }
+      }).observe(D, { childList: true, subtree: true });
+    } catch (e) {}
 
     let jw;
     const patchInstance = (p) => {
@@ -137,7 +178,7 @@ function MTK() {
       D.querySelectorAll('script[src]').forEach((s) => { if (AD_RE.test(s.src)) s.remove(); });
       D.querySelectorAll('dialog, [popover]').forEach((el) => el.remove());
       if (D.body) D.body.querySelectorAll('div, section, aside, a, span').forEach((el) => {
-        if (el.isConnected && !el.querySelector('video') && el.childElementCount < 30 && /VPN|Click to Download|Download Now|Install now/i.test(el.textContent || '')) {
+        if (el.isConnected && !el.querySelector('video') && el.childElementCount < 30 && /VPN|Click to Download|Download Now|Install now|Get access|Watch hit movies|Full HD!/i.test(el.textContent || '')) {
           const box = el.closest('[style*="fixed"], [style*="absolute"]') || el;
           if (!box.querySelector('video')) box.remove();
         }
