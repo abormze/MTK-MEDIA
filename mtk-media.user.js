@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK MEDIA
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.3.0
+// @version      1.4.0
 // @description  MTK MEDIA - واجهة موبايل بدون إعلانات لموقع فاصل، تشغيل مباشر من السيرفر الأول
 // @author       MTK
 // @match        *://fasel-hd.co/*
@@ -80,16 +80,25 @@ function MTK() {
       const setup = p.setup;
       p.setup = function (cfg) {
         try {
+          try { ['jwplayer.mute', 'jwplayer.volume'].forEach((k) => localStorage.removeItem(k)); localStorage.setItem('jwplayer.mute', 'false'); localStorage.setItem('jwplayer.volume', '100'); } catch (e) {}
           if (cfg) {
             delete cfg.advertising;
             cfg.autostart = true;
+            cfg.mute = false;
+            cfg.volume = 100;
             if (cfg.playlist && Array.isArray(cfg.playlist)) cfg.playlist.forEach((it) => { if (it) delete it.adschedule; });
           }
         } catch (e) {}
         const r = setup.call(this, cfg) || p;
         try {
-          r.on('ready', () => { try { r.play(); } catch (e) {} });
-          r.on('autostartNotAllowed', () => { try { r.setMute(true); r.play(); } catch (e) {} });
+          const loud = () => { try { r.setMute(false); r.setVolume(100); } catch (e) {} };
+          r.on('ready', () => { loud(); try { r.play(); } catch (e) {} });
+          r.on('play firstFrame', () => { if (!r.__mtkForcedMute) loud(); });
+          r.on('autostartNotAllowed', () => {
+            r.__mtkForcedMute = true;
+            try { r.setMute(true); r.play(); } catch (e) {}
+            onTap(() => { r.__mtkForcedMute = false; loud(); try { r.play(); } catch (e) {} });
+          });
           r.on('adStarted adImpression adPlay', () => { try { r.skipAd(); } catch (e) {} });
         } catch (e) {}
         return r;
@@ -135,13 +144,23 @@ function MTK() {
         });
       }
     };
+    function onTap(fn) {
+      const h = () => { ['pointerdown', 'touchend', 'click', 'keydown'].forEach((t) => D.removeEventListener(t, h, true)); fn(); };
+      ['pointerdown', 'touchend', 'click', 'keydown'].forEach((t) => D.addEventListener(t, h, true));
+    }
     const tryPlay = () => {
       D.querySelectorAll('video').forEach((v) => {
         if (v.__mtk) return;
         v.__mtk = true;
         v.setAttribute('playsinline', '');
+        v.muted = false;
+        v.volume = 1;
         const p = v.play && v.play();
-        if (p && p.catch) p.catch(() => { v.muted = true; v.play().catch(() => {}); });
+        if (p && p.catch) p.catch(() => {
+          v.muted = true;
+          v.play().catch(() => {});
+          onTap(() => { v.muted = false; v.volume = 1; v.play().catch(() => {}); });
+        });
       });
     };
     new MutationObserver(() => { addCss(); sweep(); tryPlay(); }).observe(D, { childList: true, subtree: true });
