@@ -33,6 +33,8 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 public class MainActivity extends Activity {
@@ -52,6 +54,62 @@ public class MainActivity extends Activity {
     private WebChromeClient.CustomViewCallback customCb;
     private boolean docStart;
     private String script;
+    private static final String HOSTS_URL = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts";
+    private static final Pattern KEEP = Pattern.compile("(^|\\.)(fasel[^.]*\\.[a-z.]+|faselhdcdn\\.com|scdns\\.io|wp\\.com|jwplayer\\.com|jwpcdn\\.com|cloudflare\\.com|github\\.io|githubusercontent\\.com)$");
+    private volatile Set<String> adHosts = new HashSet<>();
+
+    private boolean isAd(String host) {
+        if (host == null || host.isEmpty()) return false;
+        host = host.toLowerCase();
+        if (AD_HOSTS.matcher(host).find()) return true;
+        if (KEEP.matcher(host).find()) return false;
+        Set<String> set = adHosts;
+        String h = host;
+        while (true) {
+            if (set.contains(h)) return true;
+            int i = h.indexOf('.');
+            if (i < 0 || h.indexOf('.', i + 1) < 0) return false;
+            h = h.substring(i + 1);
+        }
+    }
+
+    private void loadAdHosts() {
+        new Thread(() -> {
+            try {
+                File f = new File(getFilesDir(), "adhosts.txt");
+                InputStream in = f.exists() && f.length() > 100000 ? new java.io.FileInputStream(f) : getAssets().open("adhosts.txt");
+                Set<String> set = new HashSet<>(100000);
+                try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(in, StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = r.readLine()) != null) {
+                        int c = line.indexOf('#');
+                        if (c >= 0) line = line.substring(0, c);
+                        line = line.trim();
+                        if (line.isEmpty()) continue;
+                        String[] p = line.split("\\s+");
+                        String h = p.length > 1 ? p[1] : p[0];
+                        if (h.indexOf('.') > 0 && !h.equals("0.0.0.0")) set.add(h.toLowerCase());
+                    }
+                }
+                set.remove("localhost");
+                adHosts = set;
+                if (!f.exists() || System.currentTimeMillis() - f.lastModified() > 3L * 86400000L) {
+                    HttpURLConnection c = (HttpURLConnection) new URL(HOSTS_URL).openConnection();
+                    c.setConnectTimeout(10000);
+                    c.setReadTimeout(30000);
+                    if (c.getResponseCode() == 200) {
+                        String body = readAll(c.getInputStream());
+                        if (body.length() > 100000) {
+                            File tmp = new File(getFilesDir(), "adhosts.tmp");
+                            try (FileOutputStream o = new FileOutputStream(tmp)) { o.write(body.getBytes(StandardCharsets.UTF_8)); }
+                            tmp.renameTo(f);
+                        }
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }).start();
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -79,6 +137,7 @@ public class MainActivity extends Activity {
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, true);
 
+        loadAdHosts();
         script = loadScript();
         docStart = WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT);
         if (docStart) WebViewCompat.addDocumentStartJavaScript(web, script, Collections.singleton("*"));
@@ -87,8 +146,7 @@ public class MainActivity extends Activity {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
                 Uri u = r.getUrl();
-                String host = u.getHost() == null ? "" : u.getHost();
-                if (AD_HOSTS.matcher(host).find()) {
+                if (isAd(u.getHost())) {
                     return new WebResourceResponse("text/plain", "utf-8", new ByteArrayInputStream(new byte[0]));
                 }
                 return null;

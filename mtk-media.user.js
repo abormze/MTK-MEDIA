@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK MEDIA
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.4.0
+// @version      1.5.0
 // @description  MTK MEDIA - واجهة موبايل بدون إعلانات لموقع فاصل، تشغيل مباشر من السيرفر الأول
 // @author       MTK
 // @match        *://fasel-hd.co/*
@@ -135,6 +135,13 @@ function MTK() {
         if (!s || AD_RE.test(s)) f.remove();
       });
       D.querySelectorAll('script[src]').forEach((s) => { if (AD_RE.test(s.src)) s.remove(); });
+      D.querySelectorAll('dialog, [popover]').forEach((el) => el.remove());
+      if (D.body) D.body.querySelectorAll('div, section, aside, a, span').forEach((el) => {
+        if (el.isConnected && !el.querySelector('video') && el.childElementCount < 30 && /VPN|Click to Download|Download Now|Install now/i.test(el.textContent || '')) {
+          const box = el.closest('[style*="fixed"], [style*="absolute"]') || el;
+          if (!box.querySelector('video')) box.remove();
+        }
+      });
       if (D.body) {
         Array.from(D.body.children).forEach((el) => {
           if (el.tagName === 'SCRIPT' || el.tagName === 'STYLE') return;
