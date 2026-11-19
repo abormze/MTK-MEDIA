@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK MEDIA
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.1.0
+// @version      1.2.0
 // @description  MTK MEDIA - واجهة موبايل بدون إعلانات لموقع فاصل، تشغيل مباشر من السيرفر الأول
 // @author       MTK
 // @match        *://fasel-hd.co/*
@@ -13,11 +13,14 @@
 // @updateURL    https://abormze.github.io/MTK-MEDIA/mtk-media.user.js
 // ==/UserScript==
 
-(function () {
+function MTK() {
   'use strict';
   const W = window;
   const D = document;
   const NATIVE_KEY = 'mtk_native';
+  if (W.__mtkOn) return;
+  W.__mtkOn = true;
+  if (D.documentElement) D.documentElement.setAttribute('data-mtk', '1');
 
   /* ---------------- popup / redirect-ad blocking (all frames) ---------------- */
   const isExternal = (href) => {
@@ -27,8 +30,17 @@
       return u.hostname !== location.hostname;
     } catch (e) { return false; }
   };
-  try { W.open = function () { return null; }; } catch (e) {}
-  try { W.alert = function () {}; W.confirm = function () { return false; }; W.prompt = function () { return null; }; } catch (e) {}
+  const lockWin = (w) => {
+    const fns = { open: () => null, alert: () => {}, confirm: () => false, prompt: () => null, print: () => {} };
+    for (const k in fns) { try { Object.defineProperty(w, k, { value: fns[k], writable: false, configurable: false }); } catch (e) { try { w[k] = fns[k]; } catch (e2) {} } }
+    try { if (w.Notification) w.Notification.requestPermission = () => Promise.resolve('denied'); } catch (e) {}
+    try { const DP = w.HTMLDialogElement && w.HTMLDialogElement.prototype; if (DP) { DP.showModal = function () { this.remove(); }; DP.show = function () { this.remove(); }; } } catch (e) {}
+  };
+  lockWin(W);
+  try {
+    const cw = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'contentWindow');
+    Object.defineProperty(HTMLIFrameElement.prototype, 'contentWindow', { configurable: true, get() { const w = cw.get.call(this); try { if (w) lockWin(w); } catch (e) {} return w; } });
+  } catch (e) {}
   D.addEventListener('click', (e) => {
     const a = e.target && e.target.closest && e.target.closest('a[href]');
     if (a && (a.target === '_blank' || isExternal(a.href))) {
@@ -54,6 +66,7 @@
   }
   if (/^\/(wp-admin|wp-login|account|login|register|cdn-cgi)/.test(location.pathname)) return;
   try { W.stop(); } catch (e) {}
+  try { const top = setTimeout(() => {}, 0); for (let i = 0; i <= top + 50; i++) { clearTimeout(i); clearInterval(i); } } catch (e) {}
   appMode();
 
   /* ============================== PLAYER ============================== */
@@ -223,6 +236,16 @@
     const sheet = h('div', { id: 'mtk-sheet', onclick: (e) => { if (e.target.id === 'mtk-sheet') closeSheet(); } });
     const fsBox = h('div', { id: 'mtk-fs' });
     D.body.append(header, main, nav, sheet, fsBox);
+    const mine = new Set([header, main, nav, sheet, fsBox]);
+    const headKeep = new Set(Array.from(D.head.children));
+    const purge = () => {
+      Array.from(D.documentElement.children).forEach((el) => { if (el !== D.head && el !== D.body) el.remove(); });
+      Array.from(D.body.children).forEach((el) => { if (!mine.has(el)) el.remove(); });
+      Array.from(D.head.children).forEach((el) => { if (!headKeep.has(el) && (el.tagName === 'SCRIPT' || el.tagName === 'IFRAME' || el.tagName === 'LINK')) el.remove(); });
+      D.querySelectorAll('dialog, [popover], script').forEach((el) => el.remove());
+      D.querySelectorAll('iframe').forEach((f) => { if (!f.closest('#mtk-fs')) f.remove(); });
+    };
+    new MutationObserver(purge).observe(D.documentElement, { childList: true, subtree: true });
 
     /* ---------- fullscreen player ---------- */
     let fsOn = false;
@@ -628,4 +651,14 @@ html.fs,html.fs body{overflow:hidden!important}
 `;
     }
   }
+}
+
+(function boot() {
+  try {
+    const s = document.createElement('script');
+    s.textContent = '(' + MTK.toString() + ')();';
+    (document.head || document.documentElement).appendChild(s);
+    s.remove();
+  } catch (e) {}
+  if (!(document.documentElement && document.documentElement.hasAttribute('data-mtk'))) MTK();
 })();
