@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK MEDIA
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.2.0
+// @version      1.3.0
 // @description  MTK MEDIA - واجهة موبايل بدون إعلانات لموقع فاصل، تشغيل مباشر من السيرفر الأول
 // @author       MTK
 // @match        *://fasel-hd.co/*
@@ -178,8 +178,13 @@ function MTK() {
       return el;
     };
     const txt = (el) => (el ? el.textContent.replace(/\s+/g, ' ').trim() : '');
-    const abs = (u, base) => { try { const x = new URL(u, base || ORIGIN); if (/fasel/i.test(x.hostname)) { x.protocol = location.protocol; x.host = location.host; } return x.href; } catch (e) { return ''; } };
-    const imgOf = (img, base) => img ? abs(img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || img.getAttribute('src') || '', base) : '';
+    const abs = (u, base) => { try { const x = new URL(u, base || ORIGIN); if (/fasel/i.test(x.hostname) && !/cdn|static|img/i.test(x.hostname)) { x.protocol = location.protocol; x.host = location.host; } return x.href; } catch (e) { return ''; } };
+    const imgOf = (img, base) => {
+      if (!img) return '';
+      const u = img.getAttribute('data-src') || img.getAttribute('data-lazy-src') || img.getAttribute('data-original') || img.getAttribute('src') || '';
+      if (!u || /blank\.gif|^data:/i.test(u)) return '';
+      try { return new URL(u, base || ORIGIN).href; } catch (e) { return ''; }
+    };
     const isInternal = (u) => { try { return new URL(u, location.href).host === location.host; } catch (e) { return false; } };
     const icon = (name) => {
       const P = {
@@ -250,7 +255,17 @@ function MTK() {
     /* ---------- fullscreen player ---------- */
     let fsOn = false;
     let fsNative = false;
-    const fsClose = () => h('button', { class: 'hbtn fsx', 'aria-label': 'إغلاق', onclick: closeFS }, icon('close'));
+    let uiT = 0;
+    const showUI = () => {
+      fsBox.classList.add('ui');
+      clearTimeout(uiT);
+      uiT = setTimeout(() => fsBox.classList.remove('ui'), 3000);
+    };
+    const guard = (fn) => (e) => {
+      if (!fsBox.classList.contains('ui')) { e.preventDefault(); e.stopPropagation(); showUI(); return; }
+      fn(e);
+    };
+    const fsClose = () => h('button', { class: 'hbtn fsx', 'aria-label': 'إغلاق', onclick: guard(closeFS) }, icon('close'));
     const playerFrame = (src) => h('iframe', {
       src, allow: 'autoplay; fullscreen; encrypted-media; picture-in-picture', allowfullscreen: true, frameborder: '0', scrolling: 'no', referrerpolicy: 'origin',
       sandbox: 'allow-scripts allow-same-origin allow-forms allow-presentation allow-orientation-lock',
@@ -260,6 +275,7 @@ function MTK() {
       fsBox.append(h('div', { class: 'loader' }, h('i'), h('i'), h('i')), fsClose());
       fsBox.classList.add('open');
       D.documentElement.classList.add('fs');
+      showUI();
       if (fsOn) return;
       fsOn = true;
       try {
@@ -274,7 +290,14 @@ function MTK() {
     function playFS(src, next) {
       if (!fsOn) return;
       fsBox.textContent = '';
-      fsBox.append(playerFrame(src), fsClose(), next ? h('a', { class: 'fsn playfs', href: next }, 'الحلقة التالية ', icon('next')) : null);
+      const fr = playerFrame(src);
+      fr.addEventListener('load', () => {
+        try { ['pointerdown', 'touchstart', 'mousemove'].forEach((t) => fr.contentDocument.addEventListener(t, showUI, { capture: true, passive: true })); } catch (e) {}
+      });
+      const nx = next ? h('a', { class: 'fsn playfs', href: next }, 'الحلقة التالية ', icon('next')) : null;
+      if (nx) nx.addEventListener('click', (e) => { if (!fsBox.classList.contains('ui')) { e.preventDefault(); e.stopImmediatePropagation(); showUI(); } }, true);
+      fsBox.append(fr, fsClose(), nx);
+      showUI();
     }
     function closeFS() {
       if (!fsOn) return;
@@ -628,6 +651,8 @@ form input:focus{border-color:var(--acc)}
 #mtk-fs.open{display:block}
 #mtk-fs iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 #mtk-fs .loader{height:100%;padding:0;align-items:center}
+#mtk-fs .fsx,#mtk-fs .fsn{opacity:0;transition:opacity .3s}
+#mtk-fs.ui .fsx,#mtk-fs.ui .fsn,#mtk-fs .loader~.fsx{opacity:1}
 #mtk-fs .fsx{position:absolute;top:calc(10px + env(safe-area-inset-top));left:10px;z-index:3;background:rgba(0,0,0,.55);border-radius:50%;color:#fff}
 #mtk-fs .fsn{position:absolute;top:calc(10px + env(safe-area-inset-top));right:10px;z-index:3;display:flex;align-items:center;gap:4px;background:rgba(0,0,0,.55);color:#fff;border-radius:20px;padding:8px 12px;font-size:13px;font-weight:700}
 html.fs,html.fs body{overflow:hidden!important}
