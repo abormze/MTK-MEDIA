@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK PRIME
 // @namespace    mtk-media
-// @version      1.0.3
+// @version      1.1.0
 // @description  MTK MEDIA for vidsrcprime: no ads, direct fullscreen player, Arabic subtitles, TV remote support
 // @match        *://vidsrcprime.site/*
 // @match        *://*.vidsrcprime.site/*
@@ -76,6 +76,13 @@
       .observe(D, { childList: true, subtree: true });
     const ping = () => { try { parent.postMessage('mtk-act', '*'); } catch (e) {} };
     ['pointerdown', 'touchstart', 'mousemove', 'keydown'].forEach((t) => W.addEventListener(t, ping, true));
+    const RT = +((location.hash.match(/mtkt=(\d+)/) || [])[1] || 0);
+    let sought = 0;
+    const seekRT = (v) => { if (sought < 2 && RT > 0 && v.duration > RT + 30 && v.currentTime < RT - 5) { sought++; try { v.currentTime = RT; } catch (e) {} } };
+    D.addEventListener('loadedmetadata', (e) => seekRT(e.target), true);
+    D.addEventListener('playing', (e) => seekRT(e.target), true);
+    const rep = () => { const v = D.querySelector('video'); if (v && v.duration > 60 && v.currentTime > 5 && (!RT || sought)) try { parent.postMessage({ mtk: 'pos', p: v.currentTime, d: v.duration }, '*'); } catch (e) {} };
+    setInterval(rep, 5000); D.addEventListener('pause', rep, true);
     let tries = 0, userPaused = false;
     const kick = (v) => {
       if (!v || userPaused) return;
@@ -178,12 +185,80 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,[t
     const src = (r) => r.t === 'movie'
       ? `https://cinesrc.st/embed/movie/${r.id}?autoplay=true&subtitlelang=${SUB}`
       : `https://cinesrc.st/embed/tv/${r.id}?s=${r.s}&e=${r.e}&autoplay=true&subtitlelang=${SUB}`;
+    // watch history / continue watching
+    const HK = 'mtk-hist';
+    const hist = () => { try { return JSON.parse(localStorage.getItem(HK)) || []; } catch (e) { return []; } };
+    const saveH = (h) => { try { localStorage.setItem(HK, JSON.stringify(h.slice(0, 30))); } catch (e) {} };
+    const slugT = (sl) => sl.replace(/^\d+-?/, '').split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    let meta = {}, curSid = null;
+    const grab = (el) => {
+      const onDetail = /^\/(movie|tv)\//.test(location.pathname);
+      if (onDetail) {
+        const h = D.querySelector('h1'), im = [...D.images].find((i) => /image\.tmdb\.org\/t\/p\/w(342|500|780)\//.test(i.src));
+        return { title: h ? h.textContent.trim() : '', poster: im ? im.src.replace(/\/w\d+\//, '/w342/') : '' };
+      }
+      const a = el && el.closest && el.closest('a[href],[role="link"],div');
+      const im = a && (a.querySelector('img') || (a.closest('a') && a.closest('a').querySelector('img')));
+      return im ? { title: (im.alt || '').trim(), poster: /tmdb/.test(im.src) ? im.src.replace(/\/w\d+\//, '/w342/') : im.src } : {};
+    };
+    D.addEventListener('click', (e) => { meta = grab(e.target); }, true);
+    const record = (r) => {
+      const sid = r.t + ':' + r.id, h = hist(), i = h.findIndex((x) => x.sid === sid), old = i >= 0 ? h[i] : null;
+      const same = old && old.s === r.s && old.e === r.e;
+      const ent = { sid, t: r.t, id: r.id, slug: r.slug, s: r.s, e: r.e,
+        title: (meta.title && meta.title.length < 120 ? meta.title : '') || (old && old.title) || slugT(r.slug),
+        poster: meta.poster || (old && old.poster) || '', p: same ? old.p || 0 : 0, d: same ? old.d || 0 : 0, at: Date.now() };
+      if (i >= 0) h.splice(i, 1);
+      h.unshift(ent); saveH(h); meta = {}; curSid = sid;
+      return ent;
+    };
+    const setPos = (sid, p, d) => { const h = hist(), x = h.find((y) => y.sid === sid); if (!x || !(p > 0)) return; x.p = p; if (d > 0) x.d = d; x.at = Date.now(); saveH(h); };
+    W.addEventListener('message', (e) => { const m = e.data; if (m && m.mtk === 'pos' && curSid) setPos(curSid, m.p, m.d); });
+    W.__mtkCur = () => { const x = hist().find((y) => y.sid === curSid); return JSON.stringify({ k: curSid || '', p: x && x.p > 30 && !(x.d && x.p > x.d - 120) ? Math.floor(x.p) : 0 }); };
+    W.__mtkSetPos = (k, p, d) => { setPos(k, p, d); cw(); };
+    css('#mtk-cw{padding:18px 4% 6px;position:relative;z-index:2}#mtk-cw h2{font-size:22px;font-weight:800;color:#fff;margin:0 0 12px}'
+      + '.mtk-cw-row{display:flex;gap:14px;overflow-x:auto;padding:4px 4px 8px;scrollbar-width:none}.mtk-cw-c{flex:0 0 auto;width:150px;color:#fff;text-decoration:none;border-radius:12px;overflow:hidden;background:#1a1a22;outline:none;direction:ltr}'
+      + '.mtk-cw-c:focus,.mtk-cw-c:hover{box-shadow:0 0 0 3px #ff2d55;transform:scale(1.04)}.mtk-cw-c img{width:150px;height:225px;object-fit:cover;display:block;background:#2a2a33}'
+      + '.mtk-cw-t{font-size:13px;font-weight:700;padding:7px 8px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mtk-cw-s{font-size:12px;color:#aaa;padding:2px 8px 7px;direction:rtl;text-align:right}'
+      + '.mtk-cw-b{height:4px;background:#444}.mtk-cw-b i{display:block;height:100%;background:#ff2d55}');
+    const wurl = (x) => x.t === 'movie' ? '/watch/movie/' + x.slug : '/watch/tv/' + x.slug + '/' + x.s + '/' + x.e;
+    function cw() {
+      let box = D.getElementById('mtk-cw');
+      if (location.pathname !== '/') { if (box) box.remove(); return; }
+      const h = hist().filter((x) => !(x.t === 'movie' && x.d && x.p > x.d - 180)).slice(0, 20);
+      if (!h.length) { if (box) box.remove(); return; }
+      const first = [...D.querySelectorAll('section')].find((x) => x.id !== 'mtk-cw');
+      if (!first) return;
+      const sig = JSON.stringify(h.map((x) => [x.sid, x.s, x.e, Math.round((x.p || 0) / 30), x.poster]));
+      if (box && box.dataset.sig === sig && box.nextElementSibling === first) return;
+      if (!box) { box = D.createElement('section'); box.id = 'mtk-cw'; box.dir = 'rtl'; }
+      if (box.dataset.sig !== sig) {
+        box.dataset.sig = sig;
+        box.innerHTML = '<h2>تابع المشاهدة</h2><div class="mtk-cw-row"></div>';
+        const row = box.lastChild;
+        h.forEach((x) => {
+          const a = D.createElement('a'); a.className = 'mtk-cw-c'; a.href = wurl(x);
+          const pc = x.d ? Math.min(100, Math.round(100 * x.p / x.d)) : 0;
+          a.innerHTML = '<img loading="lazy" alt=""><div class="mtk-cw-t"></div><div class="mtk-cw-s"></div><div class="mtk-cw-b"><i style="width:' + pc + '%"></i></div>';
+          if (x.poster) a.querySelector('img').src = x.poster;
+          a.querySelector('.mtk-cw-t').textContent = x.title;
+          a.querySelector('.mtk-cw-s').textContent = (x.t === 'tv' ? 'م' + x.s + ' • ح' + x.e + ' • ' : '') + (x.p > 30 ? 'كمّل من ' + Math.floor(x.p / 60) + ' د' : 'من البداية');
+          a.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopImmediatePropagation(); history.pushState({}, '', a.getAttribute('href')); }, true);
+          row.appendChild(a);
+        });
+      }
+      if (box.nextElementSibling !== first) first.parentNode.insertBefore(box, first);
+    }
+    let cwT = 0;
+    new MutationObserver(() => { if (!cwT) cwT = setTimeout(() => { cwT = 0; cw(); }, 400); }).observe(D, { childList: true, subtree: true });
+
     const P = history.pushState, R = history.replaceState;
     history.pushState = function (st, t, url) {
       try {
         const u = new URL(url, location.href);
         const m = u.pathname.match(/^\/movie\/(\d+[^/]*)\/?$/);
         if (m) url = '/watch/movie/' + m[1];
+        if (/^\/watch\//.test(new URL(url, location.href).pathname) && /^\/(movie|tv)\//.test(location.pathname) && !meta.poster) meta = grab(null);
         if (/^\/watch\//.test(new URL(url, location.href).pathname)) goFull();
       } catch (e) {}
       const r = P.call(this, st, t, url); setTimeout(sync, 0); return r;
@@ -204,11 +279,16 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,[t
     function sync() {
       const r = route();
       let pl = D.getElementById('mtk-pl');
+      cw();
       if (!r) {
         if (pl) { pl.remove(); D.documentElement.classList.remove('mtk-on'); exitFull(); }
+        curSid = null;
         return;
       }
-      const s = src(r);
+      let s = src(r);
+      const cur = hist()[0], ek = r.t + ':' + r.id;
+      const ent = cur && cur.sid === ek && cur.s === r.s && cur.e === r.e && curSid === ek ? cur : record(r);
+      if (ent.p > 30 && !(ent.d && ent.p > ent.d - 120)) s += '#mtkt=' + Math.floor(ent.p);
       if (!pl) {
         pl = D.createElement('div'); pl.id = 'mtk-pl';
         const x = D.createElement('button'); x.id = 'mtk-x'; x.textContent = '✕'; x.onclick = close;
@@ -224,7 +304,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,[t
         pl.appendChild(n);
       } else if (r.t !== 'tv' && n) n.remove();
       let f = pl.querySelector('iframe');
-      if (!f || f.dataset.s !== s) {
+      if (!f || f.dataset.s.split('#')[0] !== s.split('#')[0]) {
         if (f) f.remove();
         f = D.createElement('iframe');
         f.dataset.s = s;
