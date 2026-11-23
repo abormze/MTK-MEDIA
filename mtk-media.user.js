@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK MEDIA
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.7.0
+// @version      1.8.0
 // @description  MTK MEDIA - واجهة موبايل بدون إعلانات لموقع فاصل، تشغيل مباشر من السيرفر الأول
 // @author       MTK
 // @match        *://fasel-hd.co/*
@@ -331,6 +331,72 @@ function MTK() {
       D.querySelectorAll('iframe').forEach((f) => { if (!f.closest('#mtk-fs')) f.remove(); });
     };
     new MutationObserver(purge).observe(D.documentElement, { childList: true, subtree: true });
+    const DIRS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+    const FOC = 'a[href],button,input,[tabindex]:not([tabindex="-1"])';
+    const visEl = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && !el.disabled; };
+    function spatial(dir, cur) {
+      const open = sheet.classList.contains('open');
+      const pool = open ? [sheet] : [main, header, nav];
+      const all = [];
+      pool.forEach((c) => c.querySelectorAll(FOC).forEach((el) => { if (visEl(el)) all.push(el); }));
+      const a = cur.getBoundingClientRect();
+      const ax = a.left + a.width / 2, ay = a.top + a.height / 2;
+      const pick = (list) => {
+        let best = null, bs = Infinity;
+        list.forEach((el) => {
+          if (el === cur || el.contains(cur) || cur.contains(el)) return;
+          const r = el.getBoundingClientRect();
+          const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+          let pri, sec, ov;
+          if (dir[0]) {
+            pri = (cx - ax) * dir[0];
+            ov = r.top < a.bottom - 2 && r.bottom > a.top + 2;
+            sec = ov ? 0 : Math.abs(cy - ay);
+          } else {
+            pri = (cy - ay) * dir[1];
+            ov = r.left < a.right - 2 && r.right > a.left + 2;
+            sec = ov ? Math.abs(cx - ax) * 0.3 : Math.abs(cx - ax);
+          }
+          if (pri < 4) return;
+          const sc = pri + sec * (dir[0] ? 4 : 2);
+          if (sc < bs) { bs = sc; best = el; }
+        });
+        return best;
+      };
+      if (open) return pick(all);
+      const inMain = main.contains(cur);
+      const mainEls = all.filter((el) => main.contains(el));
+      if (inMain) return pick(mainEls) || (dir[1] > 0 ? pick(all.filter((el) => nav.contains(el))) : dir[1] < 0 ? pick(all.filter((el) => header.contains(el))) : null);
+      const bar = header.contains(cur) ? header : nav;
+      const same = pick(all.filter((el) => bar.contains(el)));
+      if (dir[0]) return same;
+      const vis = mainEls.filter((el) => { const r = el.getBoundingClientRect(); return r.bottom > 60 && r.top < innerHeight - 60; });
+      return pick(vis.length ? vis : mainEls) || same;
+    }
+    D.addEventListener('keydown', (e) => {
+      const dir = DIRS[e.key];
+      if (!dir || fsOn || e.altKey || e.ctrlKey || e.metaKey) return;
+      const cur = D.activeElement;
+      if (cur && cur.tagName === 'INPUT' && dir[0]) return;
+      e.preventDefault();
+      e.stopPropagation();
+      let nx;
+      if (!cur || cur === D.body || !visEl(cur) || !(main.contains(cur) || header.contains(cur) || nav.contains(cur) || sheet.contains(cur))) {
+        const c = (sheet.classList.contains('open') ? sheet : main).querySelectorAll(FOC);
+        nx = Array.from(c).find((el) => { if (!visEl(el)) return false; const r = el.getBoundingClientRect(); return r.bottom > 60 && r.top < innerHeight - 60; }) || c[0];
+      } else nx = spatial(dir, cur);
+      if (!nx) return;
+      nx.focus({ preventScroll: true });
+      if (main.contains(nx) || sheet.contains(nx)) {
+        const sc = nx.closest('.scroller');
+        if (sc) {
+          const r = nx.getBoundingClientRect(), sr = sc.getBoundingClientRect();
+          if (r.left < sr.left + 10 || r.right > sr.right - 10) sc.scrollBy({ left: r.left + r.width / 2 - (sr.left + sr.width / 2), behavior: 'smooth' });
+        }
+        const r = nx.getBoundingClientRect();
+        if (r.top < 70 || r.bottom > innerHeight - 80) W.scrollBy({ top: r.top + r.height / 2 - innerHeight / 2, behavior: 'smooth' });
+      }
+    }, true);
 
     /* ---------- watch history ---------- */
     const HK = 'mtk-hist';
@@ -773,7 +839,7 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(-
 .rhead{display:flex;justify-content:space-between;align-items:center;padding:0 14px;margin-bottom:10px}
 .rhead h3{margin:0;font-size:16px;border-right:3px solid var(--acc);padding-right:8px}
 .rhead a{color:var(--acc);font-size:13px}
-.scroller{display:flex;gap:10px;overflow-x:auto;padding:0 14px 4px;scroll-snap-type:x mandatory;scrollbar-width:none}
+.scroller{display:flex;gap:10px;overflow-x:auto;padding:6px 14px;scroll-snap-type:x mandatory;scrollbar-width:none}
 .scroller::-webkit-scrollbar{display:none}
 .scroller .card{flex:0 0 31%;scroll-snap-align:start}
 .scroller .card.wide{flex-basis:62%}
@@ -825,6 +891,26 @@ html.fs,html.fs body{overflow:hidden!important}
 .loader i{width:10px;height:10px;border-radius:50%;background:var(--acc);animation:b 1s infinite ease-in-out}
 .loader i:nth-child(2){animation-delay:.15s}.loader i:nth-child(3){animation-delay:.3s}
 @keyframes b{0%,80%,100%{transform:scale(.5);opacity:.4}40%{transform:scale(1);opacity:1}}
+@media (min-width:880px){
+body{max-width:none;padding-bottom:calc(64px + env(safe-area-inset-bottom))}
+#mtk-head,#mtk-nav{max-width:none;padding-left:24px;padding-right:24px}
+.panel{max-width:760px}
+.scroller{gap:14px;padding:0 24px 6px}
+.scroller .card{flex:0 0 12.5%}
+.scroller .card.wide{flex-basis:26%}
+.grid{grid-template-columns:repeat(7,1fr);gap:16px 14px;padding:0 24px}
+.grid.wide{grid-template-columns:repeat(4,1fr)}
+.rhead{padding:0 24px}
+.rhead h3{font-size:18px}
+.ptitle{margin:16px 24px 12px}
+.ctitle{font-size:13.5px}
+.eps{grid-template-columns:repeat(12,1fr);padding:0 24px}
+.single{padding:20px 24px}
+.poster{width:170px}
+.desc{margin:0 24px 12px;max-width:1100px}
+.btn{max-width:520px}
+.player{max-width:calc(70vh * 16 / 9);margin:0 auto}
+}
 `;
     }
   }
