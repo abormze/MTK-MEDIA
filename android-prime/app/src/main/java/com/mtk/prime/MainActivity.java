@@ -58,6 +58,35 @@ public class MainActivity extends Activity {
     private static final Pattern KEEP = Pattern.compile("(^|\\.)(vidsrcprime\\.site|cinesrc\\.st|bright67\\.online|themoviedb\\.org|tmdb\\.org|theintrodb\\.org|tailwindcss\\.com|unpkg\\.com|googleapis\\.com|gstatic\\.com|googleusercontent\\.com|github\\.io|githubusercontent\\.com)$");
     private volatile Set<String> adHosts = new HashSet<>();
     private boolean tv;
+    private volatile String subUrl;
+    private volatile long subAt, nativeAt;
+    private volatile String nativeUrl;
+
+    private void noteSub(Uri u) {
+        boolean ar = false;
+        try {
+            String m = u.getQueryParameter("m");
+            if (m != null) ar = new String(android.util.Base64.decode(m, android.util.Base64.URL_SAFE | android.util.Base64.NO_PADDING | android.util.Base64.NO_WRAP), StandardCharsets.UTF_8).contains("\"lang\":\"ar\"");
+        } catch (Exception ignored) {}
+        if (ar || subUrl == null || System.currentTimeMillis() - subAt > 30000) { subUrl = u.toString(); subAt = System.currentTimeMillis(); }
+    }
+
+    private void native_(String url) {
+        long now = System.currentTimeMillis();
+        if (url.equals(nativeUrl) && now - nativeAt < 15000) return;
+        nativeUrl = url;
+        nativeAt = now;
+        if (now - subAt > 30000) subUrl = null;
+        runOnUiThread(() -> web.postDelayed(() -> {
+            if (!url.equals(nativeUrl) || isFinishing()) return;
+            android.content.Intent i = new android.content.Intent(this, PlayerActivity.class)
+                    .putExtra("url", url)
+                    .putExtra("sub", subUrl)
+                    .putExtra("ua", web.getSettings().getUserAgentString());
+            startActivity(i);
+            web.evaluateJavascript("window.__mtkBack&&window.__mtkBack()", null);
+        }, 2500));
+    }
 
     private boolean isAd(String host) {
         if (host == null || host.isEmpty()) return false;
@@ -162,7 +191,9 @@ public class MainActivity extends Activity {
                 if (isAd(u.getHost())) {
                     return new WebResourceResponse("text/plain", "utf-8", new ByteArrayInputStream(new byte[0]));
                 }
+                if (tv && u.getHost() != null && u.getHost().startsWith("subs.") && u.getHost().endsWith("bright67.online")) noteSub(u);
                 if (tv && "GET".equals(r.getMethod()) && u.getPath() != null && u.getPath().endsWith("master.m3u8")) {
+                    native_(u.toString());
                     WebResourceResponse lite = liteMaster(u.toString(), r.getRequestHeaders());
                     if (lite != null) return lite;
                 }
