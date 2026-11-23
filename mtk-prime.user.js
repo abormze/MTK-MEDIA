@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK PRIME
 // @namespace    mtk-media
-// @version      1.0.0
+// @version      1.0.2
 // @description  MTK MEDIA for vidsrcprime: no ads, direct fullscreen player, Arabic subtitles, TV remote support
 // @match        *://vidsrcprime.site/*
 // @match        *://*.vidsrcprime.site/*
@@ -117,16 +117,38 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,[t
     const fix = (n) => {
       if (n.nodeType !== 1) return;
       if (bad(n)) return kill(n);
-      const list = n.querySelectorAll ? n.querySelectorAll('script,iframe,ins,img,span') : [];
+      const list = n.querySelectorAll ? n.querySelectorAll('script,iframe,ins,img,span,p') : [];
       [n, ...list].forEach((x) => {
         if (x !== n && bad(x)) return kill(x);
         if (x.nodeName === 'IFRAME' && x.parentNode && x.parentNode.id !== 'mtk-pl' && /nxsha|cinesrc/.test(x.src || '')) { x.src = 'about:blank'; x.style.display = 'none'; }
         else if (x.nodeName === 'IMG' && /blogger\.googleusercontent/.test(x.src || '')) { x.src = LOGO; x.alt = 'MTK MEDIA'; }
+        else if (x.nodeName === 'P' && /^\s*Disclaimer: This is a demo/i.test(x.textContent || '')) x.textContent = 'MTK MEDIA — أفلام ومسلسلات بدون إعلانات، مع ترجمة عربي.';
+        else if (x.nodeName === 'P' && /VidsRcprime\. All rights reserved/i.test(x.textContent || '')) { x.textContent = '© ' + new Date().getFullYear() + ' MTK MEDIA — جميع الحقوق محفوظة. برمجة: محمد محاجنة'; x.dir = 'rtl'; }
         else if (x.nodeName === 'SPAN' && /^\s*Advertisement\s*$/i.test(x.textContent || '') && x.parentElement) x.parentElement.style.display = 'none';
       });
     };
+    const BR = /VidsRcprime|VidSrc ?Prime|VidsRcPrime/g;
+    const brand = (n) => {
+      if (n.nodeType === 3) { if (BR.test(n.nodeValue)) n.nodeValue = n.nodeValue.replace(BR, 'MTK MEDIA'); BR.lastIndex = 0; return; }
+      if (n.nodeType !== 1 || /^(SCRIPT|STYLE)$/.test(n.nodeName)) return;
+      const w = D.createTreeWalker(n, NodeFilter.SHOW_TEXT); let t;
+      while ((t = w.nextNode())) { if (BR.test(t.nodeValue)) t.nodeValue = t.nodeValue.replace(BR, 'MTK MEDIA'); BR.lastIndex = 0; }
+      const h = n.nodeName === 'H1' ? [n] : (n.querySelectorAll ? n.querySelectorAll('h1') : []);
+      h.forEach((x) => {
+        if (!/^\s*API DOCUMENTATION\s*$/i.test(x.textContent || '')) return;
+        x.textContent = 'MTK MEDIA API';
+        if (D.getElementById('mtk-dev') || !x.parentElement) return;
+        const c = D.createElement('div'); c.id = 'mtk-dev'; c.dir = 'rtl';
+        c.style.cssText = 'margin:16px 0;padding:14px 16px;border-radius:14px;background:linear-gradient(90deg,rgba(255,45,85,.15),rgba(255,176,32,.12));border:1px solid rgba(255,45,85,.4);color:#fff;font:600 14px/1.8 system-ui,sans-serif';
+        c.innerHTML = '<div style="font-size:18px;font-weight:900"><span style="color:#ff2d55">MTK</span> MEDIA</div>'
+          + '<div>برمجة وتطوير: <b>محمد محاجنة</b></div>'
+          + '<div>بدون إعلانات • تشغيل مباشر • ترجمة عربي تلقائي • يدعم Android TV</div>'
+          + '<div style="margin-top:6px"><a href="https://abormze.github.io/MTK-MEDIA/prime/" style="color:#ffb020">تطبيق MTK PRIME</a> • <a href="https://github.com/abormze" style="color:#ffb020">GitHub</a></div>';
+        x.parentElement.appendChild(c);
+      });
+    };
     new MutationObserver((ms) => {
-      for (const m of ms) for (const n of m.addedNodes) fix(n);
+      for (const m of ms) for (const n of m.addedNodes) { fix(n); brand(n); }
       if (/vidsrc/i.test(D.title)) D.title = D.title.replace(/VidsRc ?prime|VidSrc ?Prime/gi, 'MTK MEDIA');
     }).observe(D, { childList: true, subtree: true });
 
