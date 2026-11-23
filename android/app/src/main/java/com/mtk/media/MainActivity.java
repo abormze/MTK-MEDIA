@@ -214,6 +214,13 @@ public class MainActivity extends Activity {
         if (state != null) web.restoreState(state);
         else web.loadUrl(HOME);
         updateScript();
+        Updater.check(this, "https://abormze.github.io/MTK-MEDIA/mobile/version.json");
+    }
+
+    @Override
+    protected void onNewIntent(android.content.Intent i) {
+        super.onNewIntent(i);
+        Updater.handle(this, i);
     }
 
     private void immersive(boolean on) {
