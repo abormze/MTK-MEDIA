@@ -57,6 +57,7 @@ public class MainActivity extends Activity {
     private static final String HOSTS_URL = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts";
     private static final Pattern KEEP = Pattern.compile("(^|\\.)(vidsrcprime\\.site|cinesrc\\.st|bright67\\.online|themoviedb\\.org|tmdb\\.org|theintrodb\\.org|tailwindcss\\.com|unpkg\\.com|googleapis\\.com|gstatic\\.com|googleusercontent\\.com|github\\.io|githubusercontent\\.com)$");
     private volatile Set<String> adHosts = new HashSet<>();
+    private boolean tv;
 
     private boolean isAd(String host) {
         if (host == null || host.isEmpty()) return false;
@@ -148,6 +149,7 @@ public class MainActivity extends Activity {
             }
         }, "MTKApp");
 
+        tv = isTv();
         loadAdHosts();
         script = loadScript();
         docStart = WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT);
@@ -159,6 +161,10 @@ public class MainActivity extends Activity {
                 Uri u = r.getUrl();
                 if (isAd(u.getHost())) {
                     return new WebResourceResponse("text/plain", "utf-8", new ByteArrayInputStream(new byte[0]));
+                }
+                if (tv && "GET".equals(r.getMethod()) && u.getPath() != null && u.getPath().endsWith("master.m3u8")) {
+                    WebResourceResponse lite = liteMaster(u.toString(), r.getRequestHeaders());
+                    if (lite != null) return lite;
                 }
                 return null;
             }
@@ -232,6 +238,46 @@ public class MainActivity extends Activity {
     protected void onNewIntent(android.content.Intent i) {
         super.onNewIntent(i);
         Updater.handle(this, i);
+    }
+
+    private WebResourceResponse liteMaster(String url, java.util.Map<String, String> hdr) {
+        try {
+            HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+            c.setConnectTimeout(10000);
+            c.setReadTimeout(15000);
+            for (java.util.Map.Entry<String, String> e : hdr.entrySet()) c.setRequestProperty(e.getKey(), e.getValue());
+            if (c.getResponseCode() != 200) return null;
+            ByteArrayOutputStream bo = new ByteArrayOutputStream();
+            try (InputStream in = c.getInputStream()) {
+                byte[] b = new byte[8192];
+                int n;
+                while ((n = in.read(b)) > 0) bo.write(b, 0, n);
+            }
+            String[] lines = new String(bo.toByteArray(), StandardCharsets.UTF_8).split("\\r?\\n");
+            StringBuilder keep = new StringBuilder();
+            int variants = 0, kept = 0;
+            for (int i = 0; i < lines.length; i++) {
+                String l = lines[i];
+                if (l.startsWith("#EXT-X-STREAM-INF")) {
+                    variants++;
+                    java.util.regex.Matcher m = Pattern.compile("RESOLUTION=\\d+x(\\d+)").matcher(l);
+                    boolean big = m.find() && Integer.parseInt(m.group(1)) > 720;
+                    String next = i + 1 < lines.length ? lines[i + 1] : "";
+                    i++;
+                    if (big) continue;
+                    kept++;
+                    keep.append(l).append('\n').append(next).append('\n');
+                } else keep.append(l).append('\n');
+            }
+            if (variants == 0 || kept == 0) return null;
+            java.util.Map<String, String> h = new java.util.HashMap<>();
+            h.put("Access-Control-Allow-Origin", "*");
+            h.put("Cache-Control", "no-cache");
+            return new WebResourceResponse("application/vnd.apple.mpegurl", "utf-8", 200, "OK", h,
+                    new ByteArrayInputStream(keep.toString().getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private boolean isTv() {
