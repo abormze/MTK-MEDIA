@@ -194,6 +194,7 @@ public class MainActivity extends Activity {
 
         if ((getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) WebView.setWebContentsDebuggingEnabled(true);
         tv = isTv();
+        if (tv) setupCursor();
         loadAdHosts();
         script = loadScript();
         docStart = WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT);
@@ -352,6 +353,115 @@ public class MainActivity extends Activity {
             while ((n = i.read(b)) > 0) o.write(b, 0, n);
             return o.toString("UTF-8");
         }
+    }
+
+    private View cursor;
+    private boolean curOn, curManual, curTip;
+    private float cx, cy;
+    private final android.os.Handler ui = new android.os.Handler(android.os.Looper.getMainLooper());
+    private static final String CHL_JS = "!!(window._cf_chl_opt||document.querySelector('#challenge-form,#challenge-stage,.cf-turnstile,iframe[src*=\"challenges.cloudflare.com\"]'))";
+
+    private final Runnable chk = new Runnable() {
+        @Override
+        public void run() {
+            if (isFinishing()) return;
+            web.evaluateJavascript(CHL_JS, v -> { if (!curManual) showCursor("true".equals(v)); });
+            ui.postDelayed(this, 1500);
+        }
+    };
+
+    private void setupCursor() {
+        final float d = getResources().getDisplayMetrics().density;
+        cursor = new View(this) {
+            final android.graphics.Paint p = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            final android.graphics.Path a = new android.graphics.Path();
+            {
+                a.moveTo(2 * d, 2 * d); a.lineTo(2 * d, 26 * d); a.lineTo(9 * d, 19 * d); a.lineTo(14 * d, 30 * d);
+                a.lineTo(18 * d, 28 * d); a.lineTo(13 * d, 17 * d); a.lineTo(23 * d, 17 * d); a.close();
+            }
+            @Override
+            protected void onDraw(android.graphics.Canvas c) {
+                p.setStyle(android.graphics.Paint.Style.FILL); p.setColor(Color.WHITE); c.drawPath(a, p);
+                p.setStyle(android.graphics.Paint.Style.STROKE); p.setStrokeWidth(2 * d); p.setColor(Color.BLACK); c.drawPath(a, p);
+            }
+        };
+        cursor.setVisibility(View.GONE);
+        root.addView(cursor, new FrameLayout.LayoutParams((int) (32 * d), (int) (34 * d)));
+        ui.postDelayed(chk, 2000);
+    }
+
+    private void showCursor(boolean on) {
+        if (on == curOn) return;
+        curOn = on;
+        if (on) {
+            cx = root.getWidth() / 2f; cy = root.getHeight() / 2f;
+            moveCursor(0, 0);
+            cursor.setVisibility(View.VISIBLE);
+            cursor.bringToFront();
+            if (!curTip) {
+                curTip = true;
+                android.widget.Toast.makeText(this, "حرّك المؤشر بالأسهم واكبس OK على المربع", android.widget.Toast.LENGTH_LONG).show();
+            }
+        } else cursor.setVisibility(View.GONE);
+    }
+
+    private void moveCursor(float dx, float dy) {
+        float w = root.getWidth() - 4, h = root.getHeight() - 4;
+        cx += dx; cy += dy;
+        if (cy < 0) { web.scrollBy(0, (int) cy); cy = 0; }
+        if (cy > h) { web.scrollBy(0, (int) (cy - h)); cy = h; }
+        cx = Math.max(0, Math.min(w, cx));
+        cursor.setTranslationX(cx - 2 * getResources().getDisplayMetrics().density);
+        cursor.setTranslationY(cy - 2 * getResources().getDisplayMetrics().density);
+    }
+
+    private void tapCursor() {
+        final long t = android.os.SystemClock.uptimeMillis();
+        final float x = cx, y = cy;
+        android.view.MotionEvent dn = android.view.MotionEvent.obtain(t, t, android.view.MotionEvent.ACTION_DOWN, x, y, 0);
+        dn.setSource(android.view.InputDevice.SOURCE_TOUCHSCREEN);
+        web.dispatchTouchEvent(dn);
+        dn.recycle();
+        ui.postDelayed(() -> {
+            android.view.MotionEvent up = android.view.MotionEvent.obtain(t, android.os.SystemClock.uptimeMillis(), android.view.MotionEvent.ACTION_UP, x, y, 0);
+            up.setSource(android.view.InputDevice.SOURCE_TOUCHSCREEN);
+            web.dispatchTouchEvent(up);
+            up.recycle();
+        }, 90);
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(android.view.KeyEvent e) {
+        if (cursor != null) {
+            int k = e.getKeyCode();
+            boolean down = e.getAction() == android.view.KeyEvent.ACTION_DOWN;
+            if (k == android.view.KeyEvent.KEYCODE_MENU) {
+                if (!down) { curManual = !curOn; showCursor(!curOn); }
+                return true;
+            }
+            if (curOn) {
+                float dx = 0, dy = 0;
+                switch (k) {
+                    case android.view.KeyEvent.KEYCODE_DPAD_LEFT: dx = -1; break;
+                    case android.view.KeyEvent.KEYCODE_DPAD_RIGHT: dx = 1; break;
+                    case android.view.KeyEvent.KEYCODE_DPAD_UP: dy = -1; break;
+                    case android.view.KeyEvent.KEYCODE_DPAD_DOWN: dy = 1; break;
+                    case android.view.KeyEvent.KEYCODE_DPAD_CENTER:
+                    case android.view.KeyEvent.KEYCODE_ENTER:
+                    case android.view.KeyEvent.KEYCODE_NUMPAD_ENTER:
+                        if (!down) tapCursor();
+                        return true;
+                }
+                if (dx != 0 || dy != 0) {
+                    if (down) {
+                        float st = getResources().getDisplayMetrics().density * Math.min(48, 10 + e.getRepeatCount() * 5);
+                        moveCursor(dx * st, dy * st);
+                    }
+                    return true;
+                }
+            }
+        }
+        return super.dispatchKeyEvent(e);
     }
 
     @Override

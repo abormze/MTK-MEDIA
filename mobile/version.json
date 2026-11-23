@@ -1,6 +1,6 @@
 {
- "versionCode": 7,
- "versionName": "1.6",
+ "versionCode": 8,
+ "versionName": "1.7",
  "url": "https://abormze.github.io/MTK-MEDIA/mobile/MTK-MEDIA.apk",
- "notes": "مشغّل أصلي للتلفزيون بدون تقطيع + بيكمّل من وين وقفت + شريط «تابع المشاهدة»."
+ "notes": "مؤشر بالريموت لتحقق Cloudflare على التلفزيون."
 }
