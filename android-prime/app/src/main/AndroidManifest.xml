@@ -9,8 +9,9 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:banner="@drawable/banner"
         android:hardwareAccelerated="true"
-        android:usesCleartextTraffic="true"
-        android:theme="@android:style/Theme.Material.NoActionBar">
+        android:usesCleartextTraffic="false"
+        android:allowBackup="false"
+        android:theme="@style/MtkTheme">
         <activity
             android:name=".MainActivity"
             android:exported="true"
