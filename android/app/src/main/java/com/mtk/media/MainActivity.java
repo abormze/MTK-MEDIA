@@ -33,6 +33,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -57,6 +58,60 @@ public class MainActivity extends Activity {
     private static final String HOSTS_URL = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts";
     private static final Pattern KEEP = Pattern.compile("(^|\\.)(fasel[^.]*\\.[a-z.]+|faselhdcdn\\.com|scdns\\.io|wp\\.com|jwplayer\\.com|jwpcdn\\.com|cloudflare\\.com|github\\.io|githubusercontent\\.com)$");
     private volatile Set<String> adHosts = new HashSet<>();
+    private boolean tv;
+    private volatile String nativeUrl;
+    private volatile long nativeAt, nativeOffUntil;
+
+    private boolean native_(String url, java.util.Map<String, String> req) {
+        long now = System.currentTimeMillis();
+        if (now - nativeAt < 15000) return url.equals(nativeUrl) || nativeUrl != null;
+        nativeUrl = url;
+        nativeAt = now;
+        HashMap<String, String> hdr = new HashMap<>();
+        for (java.util.Map.Entry<String, String> e : req.entrySet()) {
+            String k = e.getKey();
+            if (k.equalsIgnoreCase("Referer") || k.equalsIgnoreCase("Origin")) hdr.put(k, e.getValue());
+        }
+        String ck = CookieManager.getInstance().getCookie(url);
+        if (ck != null && !ck.isEmpty()) hdr.put("Cookie", ck);
+        runOnUiThread(() -> web.evaluateJavascript("window.__mtkCur?__mtkCur():''", v -> {
+            String key = "";
+            long start = 0;
+            try {
+                org.json.JSONObject o = new org.json.JSONObject(new org.json.JSONArray("[" + v + "]").getString(0));
+                key = o.optString("k");
+                start = o.optLong("p");
+            } catch (Exception ignored) {}
+            android.util.Log.i("MTK", "native key=" + key + " start=" + start + " url=" + url + " hdr=" + hdr.keySet());
+            startActivityForResult(new android.content.Intent(this, PlayerActivity.class)
+                    .putExtra("url", url)
+                    .putExtra("hdr", hdr)
+                    .putExtra("key", key)
+                    .putExtra("start", start)
+                    .putExtra("ua", web.getSettings().getUserAgentString()), 7);
+            web.evaluateJavascript("window.__mtkBack&&window.__mtkBack()", null);
+        }));
+        return true;
+    }
+
+    @Override
+    protected void onActivityResult(int req, int res, android.content.Intent data) {
+        super.onActivityResult(req, res, data);
+        nativeUrl = null;
+        nativeAt = 0;
+        if (req != 7 || data == null) return;
+        if (data.getBooleanExtra("err", false)) {
+            nativeOffUntil = System.currentTimeMillis() + 180000;
+            web.evaluateJavascript("window.__mtkReplay&&__mtkReplay()", null);
+        }
+        String key = data.getStringExtra("key");
+        if (key == null || key.isEmpty()) return;
+        web.evaluateJavascript("window.__mtkSetPos&&__mtkSetPos(" + org.json.JSONObject.quote(key) + "," + data.getLongExtra("pos", 0) + "," + data.getLongExtra("dur", 0) + ")", null);
+    }
+
+    private boolean isTv() {
+        return getPackageManager().hasSystemFeature(android.content.pm.PackageManager.FEATURE_LEANBACK);
+    }
 
     private boolean isAd(String host) {
         if (host == null || host.isEmpty()) return false;
@@ -137,6 +192,8 @@ public class MainActivity extends Activity {
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, true);
 
+        if ((getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) WebView.setWebContentsDebuggingEnabled(true);
+        tv = isTv();
         loadAdHosts();
         script = loadScript();
         docStart = WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT);
@@ -148,6 +205,11 @@ public class MainActivity extends Activity {
                 Uri u = r.getUrl();
                 if (isAd(u.getHost())) {
                     return new WebResourceResponse("text/plain", "utf-8", new ByteArrayInputStream(new byte[0]));
+                }
+                String path = u.getPath();
+                if (tv && System.currentTimeMillis() > nativeOffUntil && "GET".equals(r.getMethod()) && path != null && path.toLowerCase().endsWith(".m3u8")
+                        && native_(u.toString(), r.getRequestHeaders())) {
+                    return new WebResourceResponse("text/plain", "utf-8", 204, "No Content", new HashMap<>(), new ByteArrayInputStream(new byte[0]));
                 }
                 return null;
             }
@@ -178,7 +240,7 @@ public class MainActivity extends Activity {
                 root.addView(view, new FrameLayout.LayoutParams(-1, -1));
                 web.setVisibility(View.INVISIBLE);
                 immersive(true);
-                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+                if (!tv) setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
             }
 
             @Override
@@ -240,12 +302,30 @@ public class MainActivity extends Activity {
 
     private String loadScript() {
         try {
+            String asset = readAll(getAssets().open("mtk-media.user.js"));
             File f = cacheFile();
-            InputStream in = f.exists() && f.length() > 1000 ? new java.io.FileInputStream(f) : getAssets().open("mtk-media.user.js");
-            return readAll(in);
+            if (f.exists() && f.length() > 1000) {
+                String cached = readAll(new java.io.FileInputStream(f));
+                if (cmpVer(ver(cached), ver(asset)) >= 0) return cached;
+            }
+            return asset;
         } catch (Exception e) {
             return "";
         }
+    }
+
+    private static String ver(String js) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("@version\\s+([\\d.]+)").matcher(js);
+        return m.find() ? m.group(1) : "0";
+    }
+
+    private static int cmpVer(String a, String b) {
+        String[] x = a.split("\\."), y = b.split("\\.");
+        for (int i = 0; i < Math.max(x.length, y.length); i++) {
+            int p = i < x.length ? Integer.parseInt(x[i]) : 0, q = i < y.length ? Integer.parseInt(y[i]) : 0;
+            if (p != q) return Integer.compare(p, q);
+        }
+        return 0;
     }
 
     private void updateScript() {
@@ -278,10 +358,12 @@ public class MainActivity extends Activity {
     public void onBackPressed() {
         if (customView != null) {
             web.getWebChromeClient().onHideCustomView();
-        } else if (web.canGoBack()) {
-            web.goBack();
         } else {
-            super.onBackPressed();
+            web.evaluateJavascript("(window.__mtkBack&&window.__mtkBack())?1:0", v -> {
+                if ("1".equals(v)) return;
+                if (web.canGoBack()) web.goBack();
+                else finish();
+            });
         }
     }
 

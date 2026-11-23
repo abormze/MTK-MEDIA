@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK MEDIA
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.6.1
+// @version      1.7.0
 // @description  MTK MEDIA - واجهة موبايل بدون إعلانات لموقع فاصل، تشغيل مباشر من السيرفر الأول
 // @author       MTK
 // @match        *://fasel-hd.co/*
@@ -211,6 +211,19 @@ function MTK() {
         });
       });
     };
+    const RT = +((location.hash.match(/mtkt=(\d+)/) || [])[1] || 0);
+    let sought = 0;
+    const seekRT = (v) => {
+      if (sought < 2 && RT > 0 && v.duration > RT + 30 && v.currentTime < RT - 5) { sought++; try { v.currentTime = RT; } catch (e) {} }
+    };
+    D.addEventListener('loadedmetadata', (e) => seekRT(e.target), true);
+    D.addEventListener('playing', (e) => seekRT(e.target), true);
+    const rep = () => {
+      const v = D.querySelector('video');
+      if (v && v.duration > 60 && v.currentTime > 5 && (!RT || sought)) try { parent.postMessage({ mtk: 'pos', p: v.currentTime, d: v.duration }, '*'); } catch (e) {}
+    };
+    setInterval(rep, 5000);
+    D.addEventListener('pause', rep, true);
     new MutationObserver(() => { addCss(); sweep(); tryPlay(); }).observe(D, { childList: true, subtree: true });
     D.addEventListener('DOMContentLoaded', () => { sweep(); tryPlay(); });
     let n = 0;
@@ -319,6 +332,62 @@ function MTK() {
     };
     new MutationObserver(purge).observe(D.documentElement, { childList: true, subtree: true });
 
+    /* ---------- watch history ---------- */
+    const HK = 'mtk-hist';
+    const hist = () => { try { return JSON.parse(localStorage.getItem(HK)) || []; } catch (e) { return []; } };
+    const saveH = (x) => { try { localStorage.setItem(HK, JSON.stringify(x.slice(0, 30))); } catch (e) {} };
+    const sidOf = (u) => { try { const x = new URL(u, ORIGIN); return decodeURIComponent(x.pathname + x.search); } catch (e) { return u; } };
+    let curSid = '';
+    const done = (x) => x.d && x.p > x.d - 150;
+    function record(m) {
+      const sid = sidOf(m.href);
+      const all = hist();
+      const old = all.find((x) => x.sid === sid);
+      const e = Object.assign({ p: 0, d: 0 }, old, { sid, href: m.href, title: m.title || (old && old.title) || '', poster: m.poster || (old && old.poster) || '', ep: m.ep || '', ser: m.ser || '', at: Date.now() });
+      saveH([e].concat(all.filter((x) => x.sid !== sid && !(e.ser && x.ser === e.ser))));
+      curSid = sid;
+      return e;
+    }
+    function setPos(sid, p, d) {
+      if (!sid || !(p > 0)) return;
+      const all = hist();
+      const e = all.find((x) => x.sid === sid);
+      if (!e) return;
+      e.p = Math.floor(p); if (d > 0) e.d = Math.floor(d); e.at = Date.now();
+      saveH([e].concat(all.filter((x) => x !== e)));
+    }
+    W.addEventListener('message', (ev) => {
+      const m = ev.data;
+      if (m && m.mtk === 'pos' && fsOn && curSid) setPos(curSid, m.p, m.d);
+    });
+    W.__mtkCur = () => {
+      const x = hist().find((y) => y.sid === curSid);
+      return JSON.stringify({ k: curSid || '', p: x && x.p > 30 && !done(x) ? x.p : 0 });
+    };
+    W.__mtkSetPos = (k, p, d) => { setPos(k, p, d); refreshCW(); };
+    W.__mtkBack = () => { if (fsOn) { closeFS(); return true; } return false; };
+    let lastPlay = null;
+    W.__mtkReplay = () => { if (!lastPlay) return; openFS(); playFS(...lastPlay); };
+    function cwEl() {
+      const list = hist().filter((x) => !done(x) || x.ser).slice(0, 20);
+      if (!list.length) return null;
+      return h('section', { class: 'row', id: 'mtk-cw' },
+        h('div', { class: 'rhead' }, h('h3', null, 'تابع المشاهدة')),
+        h('div', { class: 'scroller' }, list.map((x) => h('a', { class: 'card cw', href: x.href, 'data-spa': '' },
+          h('div', { class: 'thumb' },
+            x.poster ? h('img', { src: x.poster, loading: 'lazy', alt: '', referrerpolicy: 'no-referrer-when-downgrade' }) : null,
+            h('span', { class: 'pl' }, icon('play')),
+            x.d ? h('span', { class: 'cwb' }, h('i', { style: 'width:' + Math.min(100, Math.round(x.p * 100 / x.d)) + '%' })) : null),
+          h('div', { class: 'ctitle' }, x.title),
+          h('div', { class: 'cws' }, [x.ep, x.p > 60 && !done(x) ? 'كمّل من ' + Math.floor(x.p / 60) + ' د' : ''].filter(Boolean).join(' • '))))));
+    }
+    function refreshCW() {
+      const old = D.getElementById('mtk-cw');
+      if (!old) return;
+      const n = cwEl();
+      if (n) old.replaceWith(n); else old.remove();
+    }
+
     /* ---------- fullscreen player ---------- */
     let fsOn = false;
     let fsNative = false;
@@ -354,9 +423,14 @@ function MTK() {
         if (p && p.then) p.then(lock, () => { fsNative = false; }); else lock();
       } catch (e) { fsNative = false; }
     }
-    function playFS(src, next) {
+    function playFS(src, next, meta) {
       if (!fsOn) return;
       fsBox.textContent = '';
+      lastPlay = [src, next, meta];
+      if (meta) {
+        const e = record(meta);
+        if (e.p > 30 && !done(e)) src = src.split('#')[0] + '#mtkt=' + e.p;
+      }
       const fr = playerFrame(src);
       fr.addEventListener('load', () => {
         try { ['pointerdown', 'touchstart', 'mousemove'].forEach((t) => fr.contentDocument.addEventListener(t, showUI, { capture: true, passive: true })); } catch (e) {}
@@ -554,7 +628,10 @@ function MTK() {
         main.append(h('div', { class: 'empty' }, q ? 'ما في نتائج لـ «' + q + '»' : 'ما في محتوى'));
         return;
       }
-      if (isHome) { gs.forEach((g) => main.append(rowEl(g))); return; }
+      if (isHome) {
+        gs.forEach((g, i) => { main.append(rowEl(g)); if (i === 0 || gs.length === 1) { const c = cwEl(); if (c && !D.getElementById('mtk-cw')) main.append(c); } });
+        return;
+      }
       let biggest = gs.reduce((a, b) => (b.items.length > a.items.length && !b.slider ? b : a), gs.find((g) => !g.slider) || gs[0]);
       gs.forEach((g) => { if (g !== biggest && g.slider) main.append(rowEl(g)); });
       main.append(h('h2', { class: 'ptitle' }, q ? 'نتائج البحث: ' + q : (biggest.title || pageTitle || doc.title.split(/[-|–]/)[0].trim())));
@@ -605,13 +682,16 @@ function MTK() {
         return h('a', { class: 'ep' + (on ? ' on' : ''), href, 'data-spa': '' }, txt(a).replace(/الحلقة\s*/, ''));
       });
       const nxt = curIdx >= 0 && eps[curIdx + 1] ? abs(eps[curIdx + 1].getAttribute('href'), base) : '';
+      const epName = (a) => a ? 'ح' + (txt(a).replace(/الحلقة\s*/, '').trim()) : '';
+      const ser = eps.length ? (poster || title) : '';
+      const meta = { href: base, title, poster, ep: curIdx >= 0 ? epName(eps[curIdx]) : '', ser };
 
       if (hasPlayer) {
         const src = firstServer(doc, base);
-        if (src && fs) playFS(src, nxt);
+        if (src && fs) playFS(src, nxt, meta);
         else if (fs) closeFS();
         main.append(h('div', { class: 'player' }, src
-          ? h('button', { class: 'tap', style: poster ? 'background-image:url("' + poster.replace(/"/g, '%22') + '")' : null, onclick: () => { openFS(); playFS(src, nxt); } }, h('span', null, icon('play')))
+          ? h('button', { class: 'tap', style: poster ? 'background-image:url("' + poster.replace(/"/g, '%22') + '")' : null, onclick: () => { openFS(); playFS(src, nxt, meta); } }, h('span', null, icon('play')))
           : h('div', { class: 'empty' }, 'ما في سيرفر مشاهدة لهالعمل')));
       } else if (fs && eps.length) {
         const tok = navToken;
@@ -619,7 +699,7 @@ function MTK() {
           if (tok !== navToken) return;
           const src = firstServer(r.doc, r.url);
           const e2 = r.doc.querySelectorAll('#epAll a[href], .epAll a[href]');
-          if (src) playFS(src, e2[1] ? abs(e2[1].getAttribute('href'), r.url) : ''); else closeFS();
+          if (src) playFS(src, e2[1] ? abs(e2[1].getAttribute('href'), r.url) : '', { href: r.url, title, poster, ep: epName(eps[0]), ser }); else closeFS();
         }, () => closeFS());
       } else if (fs) closeFS();
 
@@ -698,6 +778,9 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(-
 .scroller .card{flex:0 0 31%;scroll-snap-align:start}
 .scroller .card.wide{flex-basis:62%}
 .card{display:block;min-width:0}
+.cwb{position:absolute;left:0;right:0;bottom:0;height:4px;background:rgba(255,255,255,.25)}
+.cwb i{display:block;height:100%;background:var(--acc);margin-left:auto}
+.cws{font-size:11px;color:var(--mut);margin-top:2px}
 .card.on .thumb{outline:2px solid var(--acc)}
 .thumb{position:relative;border-radius:12px;overflow:hidden;background:var(--card);aspect-ratio:2/3}
 .card.wide .thumb{aspect-ratio:16/9}
