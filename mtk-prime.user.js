@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK PRIME
 // @namespace    mtk-media
-// @version      1.0.2
+// @version      1.0.3
 // @description  MTK MEDIA for vidsrcprime: no ads, direct fullscreen player, Arabic subtitles, TV remote support
 // @match        *://vidsrcprime.site/*
 // @match        *://*.vidsrcprime.site/*
@@ -127,12 +127,20 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,[t
         else if (x.nodeName === 'SPAN' && /^\s*Advertisement\s*$/i.test(x.textContent || '') && x.parentElement) x.parentElement.style.display = 'none';
       });
     };
-    const BR = /VidsRcprime|VidSrc ?Prime|VidsRcPrime/g;
+    const MY = 'https://abormze.github.io/MTK-MEDIA';
+    const rb = (v) => v.replace(/(?:https?:\/\/)?(?:www\.)?vidsrcprime\.site/gi, MY).replace(/VidsRc ?prime|VidSrc ?Prime/gi, 'MTK MEDIA');
+    const BR = /vidsrc ?prime/i;
+    const txt = (t) => { if (BR.test(t.nodeValue)) t.nodeValue = rb(t.nodeValue); };
+    try {
+      const cb = navigator.clipboard;
+      if (cb && cb.writeText) { const wt = cb.writeText.bind(cb); cb.writeText = (v) => wt(rb(String(v))); }
+    } catch (e) {}
     const brand = (n) => {
-      if (n.nodeType === 3) { if (BR.test(n.nodeValue)) n.nodeValue = n.nodeValue.replace(BR, 'MTK MEDIA'); BR.lastIndex = 0; return; }
+      if (n.nodeType === 3) return txt(n);
       if (n.nodeType !== 1 || /^(SCRIPT|STYLE)$/.test(n.nodeName)) return;
       const w = D.createTreeWalker(n, NodeFilter.SHOW_TEXT); let t;
-      while ((t = w.nextNode())) { if (BR.test(t.nodeValue)) t.nodeValue = t.nodeValue.replace(BR, 'MTK MEDIA'); BR.lastIndex = 0; }
+      while ((t = w.nextNode())) txt(t);
+      (n.querySelectorAll ? n.querySelectorAll('[aria-label],[title],[alt]') : []).forEach((x) => ['aria-label', 'title', 'alt'].forEach((a) => { const v = x.getAttribute(a); if (v && BR.test(v)) x.setAttribute(a, rb(v)); }));
       const h = n.nodeName === 'H1' ? [n] : (n.querySelectorAll ? n.querySelectorAll('h1') : []);
       h.forEach((x) => {
         if (!/^\s*API DOCUMENTATION\s*$/i.test(x.textContent || '')) return;
@@ -148,9 +156,9 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,[t
       });
     };
     new MutationObserver((ms) => {
-      for (const m of ms) for (const n of m.addedNodes) { fix(n); brand(n); }
-      if (/vidsrc/i.test(D.title)) D.title = D.title.replace(/VidsRc ?prime|VidSrc ?Prime/gi, 'MTK MEDIA');
-    }).observe(D, { childList: true, subtree: true });
+      for (const m of ms) { if (m.type === 'characterData') txt(m.target); else for (const n of m.addedNodes) { fix(n); brand(n); } }
+      if (BR.test(D.title)) D.title = rb(D.title);
+    }).observe(D, { childList: true, subtree: true, characterData: true });
 
     // fullscreen helpers
     const goFull = () => {

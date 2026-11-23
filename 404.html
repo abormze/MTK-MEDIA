@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<title>MTK MEDIA</title>
+<style>
+html,body{margin:0;height:100%;background:#000;color:#fff;font-family:system-ui,Tahoma,Arial,sans-serif;overflow:hidden}
+iframe{position:fixed;inset:0;width:100%;height:100%;border:0;background:#000}
+.nf{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:14px;text-align:center}
+.nf b{font-size:34px;font-weight:900}.nf b span{color:#ff2d55}
+.nf a{background:linear-gradient(90deg,#ff2d55,#ff5e3a);color:#fff;text-decoration:none;padding:12px 22px;border-radius:14px;font-weight:800}
+</style>
+</head>
+<body>
+<script>
+(function () {
+  var p = location.pathname.replace(/^\/MTK-MEDIA/, '');
+  var q = new URLSearchParams(location.search);
+  var sub = q.get('sub') || 'Arabic';
+  var m = p.match(/^\/embed\/movie\/(\d+)\/?$/);
+  var t = p.match(/^\/embed\/tv\/(\d+)\/(\d+)\/(\d+)\/?$/);
+  var src = m ? 'https://cinesrc.st/embed/movie/' + m[1] + '?autoplay=true&subtitlelang=' + sub
+          : t ? 'https://cinesrc.st/embed/tv/' + t[1] + '?s=' + t[2] + '&e=' + t[3] + '&autoplay=true&subtitlelang=' + sub : '';
+  if (src) {
+    var f = document.createElement('iframe');
+    f.setAttribute('allow', 'autoplay; fullscreen; encrypted-media; picture-in-picture');
+    f.setAttribute('allowfullscreen', '');
+    f.setAttribute('referrerpolicy', 'no-referrer');
+    f.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-presentation');
+    f.src = src;
+    document.body.appendChild(f);
+    window.open = function () { return null; };
+  } else {
+    document.body.innerHTML = '<div class="nf"><b><span>MTK</span> MEDIA</b><div>الصفحة مش موجودة</div><a href="/MTK-MEDIA/prime/">ارجع لـ MTK PRIME</a><small style="color:#888">© MTK MEDIA — برمجة: محمد محاجنة</small></div>';
+  }
+})();
+</script>
+</body>
+</html>
