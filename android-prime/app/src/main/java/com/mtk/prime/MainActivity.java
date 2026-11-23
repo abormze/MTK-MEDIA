@@ -62,13 +62,15 @@ public class MainActivity extends Activity {
     private volatile long subAt, nativeAt;
     private volatile String nativeUrl;
 
+    private volatile boolean subAr;
+
     private void noteSub(Uri u) {
         boolean ar = false;
         try {
             String m = u.getQueryParameter("m");
             if (m != null) ar = new String(android.util.Base64.decode(m, android.util.Base64.URL_SAFE | android.util.Base64.NO_PADDING | android.util.Base64.NO_WRAP), StandardCharsets.UTF_8).contains("\"lang\":\"ar\"");
         } catch (Exception ignored) {}
-        if (ar || subUrl == null || System.currentTimeMillis() - subAt > 30000) { subUrl = u.toString(); subAt = System.currentTimeMillis(); }
+        if (ar || !subAr || subUrl == null) { subUrl = u.toString(); subAr = ar; subAt = System.currentTimeMillis(); }
     }
 
     private void native_(String url) {
@@ -76,16 +78,40 @@ public class MainActivity extends Activity {
         if (url.equals(nativeUrl) && now - nativeAt < 15000) return;
         nativeUrl = url;
         nativeAt = now;
-        if (now - subAt > 30000) subUrl = null;
-        runOnUiThread(() -> web.postDelayed(() -> {
-            if (!url.equals(nativeUrl) || isFinishing()) return;
+        if (now - subAt > 5000) { subUrl = null; subAr = false; }
+        runOnUiThread(() -> web.postDelayed(() -> waitSub(url, 0), 800));
+    }
+
+    private void waitSub(String url, int n) {
+        if (!url.equals(nativeUrl) || isFinishing()) return;
+        if (!subAr && n < 14) { web.postDelayed(() -> waitSub(url, n + 1), 500); return; }
+        web.evaluateJavascript("window.__mtkCur?__mtkCur():''", v -> {
+            String key = "";
+            long start = 0;
+            try {
+                org.json.JSONObject o = new org.json.JSONObject(new org.json.JSONArray("[" + v + "]").getString(0));
+                key = o.optString("k");
+                start = o.optLong("p");
+            } catch (Exception ignored) {}
+            android.util.Log.i("MTK", "native key=" + key + " start=" + start + " sub=" + subUrl);
             android.content.Intent i = new android.content.Intent(this, PlayerActivity.class)
                     .putExtra("url", url)
                     .putExtra("sub", subUrl)
+                    .putExtra("key", key)
+                    .putExtra("start", start)
                     .putExtra("ua", web.getSettings().getUserAgentString());
-            startActivity(i);
+            startActivityForResult(i, 7);
             web.evaluateJavascript("window.__mtkBack&&window.__mtkBack()", null);
-        }, 2500));
+        });
+    }
+
+    @Override
+    protected void onActivityResult(int req, int res, android.content.Intent data) {
+        super.onActivityResult(req, res, data);
+        if (req != 7 || data == null) return;
+        String key = data.getStringExtra("key");
+        if (key == null || key.isEmpty()) return;
+        web.evaluateJavascript("window.__mtkSetPos&&__mtkSetPos(" + org.json.JSONObject.quote(key) + "," + data.getLongExtra("pos", 0) + "," + data.getLongExtra("dur", 0) + ")", null);
     }
 
     private boolean isAd(String host) {
@@ -178,6 +204,7 @@ public class MainActivity extends Activity {
             }
         }, "MTKApp");
 
+        if ((getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) WebView.setWebContentsDebuggingEnabled(true);
         tv = isTv();
         loadAdHosts();
         script = loadScript();

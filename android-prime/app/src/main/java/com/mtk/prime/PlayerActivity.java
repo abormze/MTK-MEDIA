@@ -28,6 +28,7 @@ public class PlayerActivity extends Activity {
     private ExoPlayer player;
     private PlayerView view;
     private int retries;
+    private boolean ended;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -86,6 +87,11 @@ public class PlayerActivity extends Activity {
 
         player.addListener(new Player.Listener() {
             @Override
+            public void onPlaybackStateChanged(int st) {
+                if (st == Player.STATE_ENDED) { ended = true; finish(); }
+            }
+
+            @Override
             public void onPlayerError(PlaybackException e) {
                 if (retries++ < 2) {
                     long pos = player.getCurrentPosition();
@@ -98,7 +104,8 @@ public class PlayerActivity extends Activity {
                 }
             }
         });
-        player.setMediaItem(mb.build());
+        long start = getIntent().getLongExtra("start", 0);
+        if (start > 30) player.setMediaItem(mb.build(), start * 1000); else player.setMediaItem(mb.build());
         player.prepare();
         player.setPlayWhenReady(true);
     }
@@ -118,6 +125,19 @@ public class PlayerActivity extends Activity {
             }
         }
         return super.dispatchKeyEvent(e);
+    }
+
+    @Override
+    public void finish() {
+        if (player != null) {
+            long d = player.getDuration();
+            long p = ended && d > 0 ? d : player.getCurrentPosition();
+            setResult(RESULT_OK, new android.content.Intent()
+                    .putExtra("key", getIntent().getStringExtra("key"))
+                    .putExtra("pos", p / 1000)
+                    .putExtra("dur", d > 0 ? d / 1000 : 0));
+        }
+        super.finish();
     }
 
     @Override
