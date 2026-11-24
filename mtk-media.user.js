@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK MEDIA
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.9.2
+// @version      1.10.0
 // @description  MTK MEDIA - واجهة موبايل بدون إعلانات لموقع فاصل، تشغيل مباشر من السيرفر الأول
 // @author       MTK
 // @match        *://fasel-hd.co/*
@@ -248,6 +248,46 @@ function MTK() {
       ['آسيوي', [['المسلسلات الآسيوية', '/asian-series'], ['أحدث الحلقات', '/asian-episodes']]],
       ['أنمي', [['جميع الأنمي', '/anime'], ['أحدث الحلقات', '/anime-episodes']]],
     ];
+
+    const GENRES = [
+      ['أكشن', ['اكشن', 'أكشن'], ['action']], ['كوميدي', ['كوميدي', 'كوميديا'], ['comedy']], ['دراما', ['دراما'], ['drama']],
+      ['رعب', ['رعب'], ['horror']], ['إثارة', ['اثارة', 'إثارة', 'تشويق'], ['thriller']], ['جريمة', ['جريمة'], ['crime']],
+      ['مغامرة', ['مغامرة', 'مغامرات'], ['adventure']], ['خيال علمي', ['خيال-علمي', 'خيال علمي'], ['sci-fi', 'science-fiction', 'sci-fi-fantasy']],
+      ['فانتازيا', ['فانتازيا', 'خيال'], ['fantasy']], ['رومانسي', ['رومانسي', 'رومانسية'], ['romance']], ['غموض', ['غموض'], ['mystery']],
+      ['رسوم متحركة', ['رسوم-متحركة', 'انيميشن', 'كرتون'], ['animation']], ['عائلي', ['عائلي'], ['family']], ['حروب', ['حروب', 'حربي', 'حرب'], ['war', 'war-politics']],
+      ['تاريخي', ['تاريخي'], ['history']], ['سيرة ذاتية', ['سيرة-ذاتية', 'سيرة ذاتية'], ['biography']], ['وثائقي', ['وثائقي'], ['documentary']],
+      ['رياضي', ['رياضي', 'رياضة'], ['sport']], ['موسيقي', ['موسيقي', 'موسيقى'], ['music', 'musical']],
+    ];
+    const learnedG = (t) => Object.entries(taste().g).filter(([, o]) => o.u && (t === 'm' ? /\/movies-cats\//.test(o.u) : /\/series_genres\//.test(o.u)));
+    const norm = (x) => String(x).replace(/[أإآ]/g, 'ا').replace(/[-_\s]+/g, ' ').trim().toLowerCase();
+    function genreUrls(t, n) {
+      const row = GENRES.find((g) => g[0] === n);
+      const names = row ? [n].concat(row[1], row[2]) : [n];
+      const learned = learnedG(t).filter(([k, o]) => names.some((x) => norm(x) === norm(k) || o.u.split('/').pop() && norm(decodeURIComponent(o.u.split('/').pop())) === norm(x))).map(([, o]) => o.u);
+      const base = t === 'm' ? '/movies-cats/' : '/series_genres/';
+      const guess = (row ? (t === 'm' ? row[1] : row[2]) : []).map((x) => ORIGIN + base + encodeURIComponent(x.replace(/\s+/g, '-')));
+      return Array.from(new Set(learned.concat(guess)));
+    }
+    async function goGenre(target, token) {
+      const q = new URL(target).searchParams;
+      const t = q.get('t'), n = q.get('n') || '';
+      for (const u of genreUrls(t, n)) {
+        try {
+          const r = await load(u);
+          if (token !== navToken) return true;
+          if (groups(r.doc, r.url).length) { main.textContent = ''; renderList(r.doc, r.url); const pt = main.querySelector('.ptitle'); if (pt) pt.textContent = (t === 'm' ? 'أفلام ' : 'مسلسلات ') + n; return true; }
+        } catch (e) { if (e.cf) throw e; }
+      }
+      if (token !== navToken) return true;
+      main.textContent = '';
+      main.append(h('div', { class: 'empty' }, 'ما لقيت ' + (t === 'm' ? 'أفلام ' : 'مسلسلات ') + n));
+      return true;
+    }
+    function genreChips(t) {
+      const have = new Set(GENRES.map((g) => norm(g[0])));
+      const extra = learnedG(t).map(([k]) => k).filter((k) => !have.has(norm(k)) && !GENRES.some((g) => g[t === 'm' ? 1 : 2].some((x) => norm(x) === norm(k))));
+      return GENRES.map((g) => g[0]).concat(extra).map((n) => h('a', { class: 'chip', href: '/mtk-genre?t=' + t + '&n=' + encodeURIComponent(n), 'data-spa': '' }, n));
+    }
 
     /* ---------- helpers ---------- */
     const h = (tag, attrs, ...kids) => {
@@ -578,7 +618,9 @@ function MTK() {
       sheet.append(h('div', { class: 'panel' },
         h('div', { class: 'phead' }, h('b', null, 'الأقسام'), h('button', { class: 'hbtn', onclick: closeSheet }, icon('close'))),
         MENU.map(([g, items]) => h('div', { class: 'mgroup' }, h('h4', null, g),
-          h('div', { class: 'chips' }, items.map(([l, u]) => h('a', { class: 'chip', href: u, 'data-spa': '' }, l)))))
+          h('div', { class: 'chips' }, items.map(([l, u]) => h('a', { class: 'chip', href: u, 'data-spa': '' }, l))))),
+        h('div', { class: 'mgroup' }, h('h4', null, 'أنواع الأفلام'), h('div', { class: 'chips' }, genreChips('m'))),
+        h('div', { class: 'mgroup' }, h('h4', null, 'أنواع المسلسلات'), h('div', { class: 'chips' }, genreChips('s')))
       ));
       sheet.classList.add('open');
     }
@@ -642,12 +684,21 @@ function MTK() {
       main.textContent = '';
       main.append(h('div', { class: 'loader' }, h('i'), h('i'), h('i')));
       let res;
-      try { res = await load(fu); } catch (e) {
+      try {
+        if (p === '/mtk-genre') {
+          await goGenre(target, token);
+          const st = history.state;
+          if (token === navToken) W.scrollTo(0, (!push && st && st.y) || 0);
+          return;
+        }
+        res = await load(fu);
+      } catch (e) {
         if (token !== navToken) return;
         closeFS();
         if (e.cf) {
-          sessionStorage.setItem(NATIVE_KEY, fu);
-          location.replace(fu);
+          const cu = p === '/mtk-genre' ? (genreUrls(new URL(target).searchParams.get('t'), new URL(target).searchParams.get('n') || '')[0] || ORIGIN + '/main') : fu;
+          sessionStorage.setItem(NATIVE_KEY, cu);
+          location.replace(cu);
           return;
         }
         main.textContent = '';
