@@ -1,0 +1,4 @@
+xconn/android*/app/build/
+xconn/android*/.gradle/
+xconn/android*/app/src/main/assets/xconn-*.user.js
+xconn/android*/local.properties

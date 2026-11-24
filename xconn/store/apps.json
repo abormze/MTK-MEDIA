@@ -1,0 +1,37 @@
+[
+ {
+  "name": "XCONN MEDIA",
+  "pkg": "com.xconn.media",
+  "info": "أفلام ومسلسلات أجنبية",
+  "color": "#e50914",
+  "version": "https://abormze.github.io/MTK-MEDIA/xconn/media/version.json"
+ },
+ {
+  "name": "XCONN PRIME",
+  "pkg": "com.xconn.prime",
+  "info": "أفلام ومسلسلات عالمية",
+  "color": "#f5c15c",
+  "version": "https://abormze.github.io/MTK-MEDIA/xconn/prime/version.json"
+ },
+ {
+  "name": "XCONN KIDS",
+  "pkg": "com.xconn.kids",
+  "info": "كرتون وسبيستون للأطفال",
+  "color": "#22c55e",
+  "version": "https://abormze.github.io/MTK-MEDIA/xconn/kids/version.json"
+ },
+ {
+  "name": "XCONN CLASSIC",
+  "pkg": "com.xconn.classic",
+  "info": "مسلسلات وأفلام عربية كلاسيكية",
+  "color": "#de8723",
+  "version": "https://abormze.github.io/MTK-MEDIA/xconn/classic/version.json"
+ },
+ {
+  "name": "XCONN WWE",
+  "pkg": "com.xconn.wwe",
+  "info": "عروض المصارعة مترجمة",
+  "color": "#e11d2e",
+  "version": "https://abormze.github.io/MTK-MEDIA/xconn/wwe/version.json"
+ }
+]
