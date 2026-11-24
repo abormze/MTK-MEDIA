@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK MEDIA
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.9.1
+// @version      1.9.2
 // @description  MTK MEDIA - واجهة موبايل بدون إعلانات لموقع فاصل، تشغيل مباشر من السيرفر الأول
 // @author       MTK
 // @match        *://fasel-hd.co/*
@@ -779,8 +779,11 @@ function MTK() {
         return;
       }
       if (isHome) {
-        gs.forEach((g, i) => { main.append(rowEl(g)); if (i === 0 || gs.length === 1) { const c = cwEl(); if (c && !D.getElementById('mtk-cw')) main.append(c); } });
-        forYou(D.getElementById('mtk-cw') || main.firstChild);
+        const cw = cwEl();
+        if (cw && !D.getElementById('mtk-cw')) main.append(cw);
+        let first = null;
+        gs.forEach((g) => { const r = rowEl(g); main.append(r); if (!first) first = r; });
+        forYou(first || D.getElementById('mtk-cw') || main.firstChild);
         return;
       }
       let biggest = gs.reduce((a, b) => (b.items.length > a.items.length && !b.slider ? b : a), gs.find((g) => !g.slider) || gs[0]);
