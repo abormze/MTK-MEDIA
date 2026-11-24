@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK MEDIA
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.11.2
+// @version      1.11.4
 // @description  MTK MEDIA - واجهة موبايل بدون إعلانات لموقع فاصل، تشغيل مباشر من السيرفر الأول
 // @author       MTK
 // @match        *://fasel-hd.co/*
@@ -664,8 +664,9 @@ function MTK() {
     D.addEventListener('fullscreenchange', onFsChange);
     D.addEventListener('webkitfullscreenchange', onFsChange);
 
-    function closeSheet() { sheet.classList.remove('open'); sheet.textContent = ''; }
+    function closeSheet() { if (sheet.dataset.lock) return; sheet.classList.remove('open'); sheet.textContent = ''; }
     function openMenu() {
+      if (sheet.dataset.lock) return;
       sheet.textContent = '';
       sheet.append(h('div', { class: 'panel' },
         h('div', { class: 'phead' }, h('b', null, 'الأقسام'), h('button', { class: 'hbtn', onclick: closeSheet }, icon('close'))),
@@ -679,6 +680,7 @@ function MTK() {
       sheet.classList.add('open');
     }
     function openSearch() {
+      if (sheet.dataset.lock) return;
       sheet.textContent = '';
       const inp = h('input', { type: 'search', placeholder: 'ابحث عن فيلم أو مسلسل...', enterkeyhint: 'search' });
       const form = h('form', { onsubmit: (e) => { e.preventDefault(); const q = inp.value.trim(); if (q) { closeSheet(); go('/?s=' + encodeURIComponent(q), true); } } },
@@ -704,7 +706,7 @@ function MTK() {
     W.addEventListener('popstate', () => go(location.href, false));
 
     go(location.href, false);
-    if (profs().length && !sessionStorage.getItem('mtk-picked')) setTimeout(openProfiles, 300);
+    if (!localStorage.getItem('mtk-picked')) openProfiles(true);
 
     /* ---------- router ---------- */
     function fetchUrlFor(u) {
@@ -983,10 +985,18 @@ function MTK() {
         tryU(0);
       });
     }
-    function openProfiles() {
+    function openProfiles(force) {
       sheet.textContent = '';
+      if (force) sheet.dataset.lock = '1';
       const all = [{ id: '', n: 'الرئيسي' }].concat(profs());
-      const pick = (id) => { localStorage.setItem('mtk-prof', id); sessionStorage.setItem('mtk-picked', '1'); closeSheet(); go('/mobile', true); };
+      const pick = (id) => {
+        const same = force && id === pid();
+        localStorage.setItem('mtk-prof', id);
+        localStorage.setItem('mtk-picked', '1');
+        delete sheet.dataset.lock;
+        closeSheet();
+        if (!same) go('/mobile', true);
+      };
       const inp = h('input', { type: 'text', placeholder: 'اسم الملف...', maxlength: '20' });
       const kid = h('input', { type: 'checkbox' });
       const form = h('form', { class: 'pform', onsubmit: (e) => {
@@ -997,13 +1007,14 @@ function MTK() {
         localStorage.setItem(PROFS, JSON.stringify(profs().concat([{ id, n, k: kid.checked }])));
         pick(id);
       } }, inp, h('label', { class: 'pkid' }, kid, ' ملف أطفال'), h('button', { type: 'submit', class: 'btn' }, 'إضافة'));
-      sheet.append(h('div', { class: 'panel' },
-        h('div', { class: 'phead' }, h('b', null, 'مين عم يتفرّج؟'), h('button', { class: 'hbtn', onclick: () => { sessionStorage.setItem('mtk-picked', '1'); closeSheet(); } }, icon('close'))),
+      sheet.append(h('div', { class: 'panel' + (force ? ' pgate' : '') },
+        h('div', { class: 'phead' }, h('b', null, 'مين عم يتفرّج؟'), force ? null : h('button', { class: 'hbtn', onclick: closeSheet }, icon('close'))),
         h('div', { class: 'profs' }, all.map((x) => h('button', { class: 'prof' + (x.id === pid() ? ' on' : ''), onclick: () => pick(x.id) },
           h('span', { class: 'pav' + (x.k ? ' kid' : '') }, x.n.slice(0, 1)), h('small', null, x.n + (x.k ? ' (أطفال)' : ''))))),
         pid() ? h('button', { class: 'chip', onclick: () => { localStorage.setItem(PROFS, JSON.stringify(profs().filter((x) => x.id !== pid()))); pick(''); } }, 'حذف هالملف') : null,
         h('div', { class: 'mgroup' }, h('h4', null, 'ملف جديد'), form)));
       sheet.classList.add('open');
+      setTimeout(() => { const b = sheet.querySelector('.prof.on') || sheet.querySelector('.prof'); try { b.focus({ preventScroll: true }); } catch (e) {} }, 50);
     }
     function render(doc, base, fs) {
       main.textContent = '';
@@ -1263,6 +1274,10 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(-
 .gchips .chip{flex:0 0 auto;white-space:nowrap}
 .rslot{min-height:120px}
 button.chip{font:inherit;font-size:13px;color:inherit}
+.panel.pgate{inset:0;max-width:none;max-height:none;border-radius:0;background:#0a0a10;display:flex;flex-direction:column;justify-content:center;padding:calc(20px + env(safe-area-inset-top)) 20px calc(20px + env(safe-area-inset-bottom))}
+.pgate .phead{justify-content:center;font-size:22px}
+.pgate .pav{width:96px;height:96px;font-size:40px}
+.pgate .mgroup{max-width:520px;margin:10px auto 0;width:100%}
 .profs{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;padding:16px 8px}
 .prof{background:none;border:0;color:inherit;font:inherit;display:flex;flex-direction:column;align-items:center;gap:6px}
 .pav{width:72px;height:72px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:900;color:#fff;background:linear-gradient(135deg,#e50914,#7a1b9e)}
