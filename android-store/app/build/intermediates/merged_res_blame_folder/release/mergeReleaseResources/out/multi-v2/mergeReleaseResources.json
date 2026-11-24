@@ -1,0 +1,61 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.mtk.store.app-release-4:/values-v35_values-v35.arsc.flat",
+            "map": [
+                {
+                    "source": "/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/res/values-v35/styles.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endLines": "5",
+                        "endColumns": "12",
+                        "endOffsets": "291"
+                    }
+                }
+            ]
+        },
+        {
+            "outputFile": "com.mtk.store.app-release-4:/values_values.arsc.flat",
+            "map": [
+                {
+                    "source": "/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/res/values/colors.xml",
+                    "from": {
+                        "startLines": "0",
+                        "startColumns": "11",
+                        "startOffsets": "11",
+                        "endColumns": "45",
+                        "endOffsets": "45"
+                    },
+                    "to": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "38",
+                        "endOffsets": "89"
+                    }
+                },
+                {
+                    "source": "/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/res/values/styles.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endLines": "4",
+                        "endColumns": "12",
+                        "endOffsets": "216"
+                    },
+                    "to": {
+                        "startLines": "3",
+                        "startColumns": "4",
+                        "startOffsets": "94",
+                        "endLines": "5",
+                        "endColumns": "12",
+                        "endOffsets": "255"
+                    }
+                }
+            ]
+        }
+    ]
+}

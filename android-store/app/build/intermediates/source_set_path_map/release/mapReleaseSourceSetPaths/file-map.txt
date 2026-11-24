@@ -1,0 +1,7 @@
+com.mtk.store.app-pngs-0 /home/ubuntu/repos/MTK-MEDIA/android-store/app/build/generated/res/pngs/release
+com.mtk.store.app-resValues-1 /home/ubuntu/repos/MTK-MEDIA/android-store/app/build/generated/res/resValues/release
+com.mtk.store.app-packageReleaseResources-2 /home/ubuntu/repos/MTK-MEDIA/android-store/app/build/intermediates/incremental/release/packageReleaseResources/merged.dir
+com.mtk.store.app-packageReleaseResources-3 /home/ubuntu/repos/MTK-MEDIA/android-store/app/build/intermediates/incremental/release/packageReleaseResources/stripped.dir
+com.mtk.store.app-release-4 /home/ubuntu/repos/MTK-MEDIA/android-store/app/build/intermediates/merged_res/release/mergeReleaseResources
+com.mtk.store.app-main-5 /home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/res
+com.mtk.store.app-release-6 /home/ubuntu/repos/MTK-MEDIA/android-store/app/src/release/res

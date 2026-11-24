@@ -1,0 +1,96 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.mtk.store"
+4    android:versionCode="1"
+5    android:versionName="1.0" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="26"
+9        android:targetSdkVersion="35" />
+10
+11    <uses-permission android:name="android.permission.INTERNET" />
+11-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:3:5-67
+11-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:3:22-64
+12    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+12-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:4:5-83
+12-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:4:22-80
+13
+14    <uses-feature
+14-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:5:5-90
+15        android:name="android.hardware.touchscreen"
+15-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:5:19-62
+16        android:required="false" />
+16-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:5:63-87
+17    <uses-feature
+17-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:6:5-87
+18        android:name="android.software.leanback"
+18-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:6:19-59
+19        android:required="false" />
+19-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:6:60-84
+20
+21    <queries>
+21-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:7:5-14:15
+22        <package android:name="com.mtk.media" />
+22-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:8:9-49
+22-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:8:18-46
+23        <package android:name="com.mtk.prime" />
+23-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:9:9-49
+23-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:9:18-46
+24        <package android:name="com.mtk.kids" />
+24-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:10:9-48
+24-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:10:18-45
+25        <package android:name="com.mtk.arabic" />
+25-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:11:9-50
+25-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:11:18-47
+26        <package android:name="com.mtk.classic" />
+26-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:12:9-51
+26-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:12:18-48
+27        <package android:name="com.mtk.wwe" />
+27-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:13:9-47
+27-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:13:18-44
+28    </queries>
+29
+30    <application
+30-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:15:5-34:19
+31        android:allowBackup="false"
+31-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:21:9-36
+32        android:banner="@drawable/banner"
+32-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:19:9-42
+33        android:extractNativeLibs="false"
+34        android:icon="@mipmap/ic_launcher"
+34-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:17:9-43
+35        android:label="MTK STORE"
+35-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:16:9-34
+36        android:roundIcon="@mipmap/ic_launcher"
+36-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:18:9-48
+37        android:theme="@style/MtkTheme"
+37-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:22:9-40
+38        android:usesCleartextTraffic="false" >
+38-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:20:9-45
+39        <activity
+39-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:23:9-33:20
+40            android:name="com.mtk.store.MainActivity"
+40-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:24:13-41
+41            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize|uiMode|density"
+41-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:27:13-121
+42            android:exported="true"
+42-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:25:13-36
+43            android:launchMode="singleTask" >
+43-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:26:13-44
+44            <intent-filter>
+44-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:28:13-32:29
+45                <action android:name="android.intent.action.MAIN" />
+45-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:29:17-69
+45-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:29:25-66
+46
+47                <category android:name="android.intent.category.LAUNCHER" />
+47-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:30:17-77
+47-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:30:27-74
+48                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+48-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:31:17-86
+48-->/home/ubuntu/repos/MTK-MEDIA/android-store/app/src/main/AndroidManifest.xml:31:27-83
+49            </intent-filter>
+50        </activity>
+51    </application>
+52
+53</manifest>

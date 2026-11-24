@@ -1,0 +1,4 @@
+#Tue Nov 24 08:29:33 UTC 2026
+base.0=/home/ubuntu/repos/MTK-MEDIA/android-store/app/build/intermediates/dex/release/mergeDexRelease/classes.dex
+renamed.0=classes.dex
+path.0=classes.dex
