@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK WWE
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.0.2
+// @version      1.0.3
 // @description  MTK WWE - عروض المصارعة بدون إعلانات، مشاهدة الآن بأول سيرفر، ملفات وPIN، تابع المشاهدة، قائمتي
 // @match        *://shahed4u.here/*
 // @match        *://*.shahed4u.here/*
@@ -22,10 +22,12 @@
   try { Object.defineProperty(W, 'open', { value: () => null, writable: false, configurable: false }); } catch (e) { W.open = () => null; }
   const kill = (n) => { try { if (n.nodeName === 'SCRIPT') { n.type = 'javascript/blocked'; n.removeAttribute('src'); } n.remove(); } catch (e) {} };
   const bad = (n) => n.nodeType === 1 && ((/^(SCRIPT|IFRAME)$/.test(n.nodeName) && AD.test(n.src || '')) || n.nodeName === 'INS' || (n.classList && n.classList.contains('adsbygoogle')));
+  const noGenre = () => D.querySelectorAll('select[onchange*="\'genre\'"]').forEach((x) => { if (x.parentElement) x.parentElement.style.display = 'none'; });
+  D.addEventListener('DOMContentLoaded', noGenre);
   const unblock = () => { if (D.body && D.body.style.overflow === 'hidden' && !D.querySelector('.mtk-gate,#mtk-pg,#mtk-prof')) D.body.style.overflow = ''; };
   new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) { if (n.nodeType === 1 && n.classList && n.classList.contains('ignielAdBlock')) { n.remove(); unblock(); continue; } if (bad(n)) kill(n); else if (n.querySelectorAll) n.querySelectorAll('script,iframe,ins').forEach((x) => { if (bad(x)) kill(x); }); } }).observe(D, { childList: true, subtree: true });
   const css = (txt) => { const add = () => { const s = D.createElement('style'); s.textContent = txt; (D.head || D.documentElement).appendChild(s); }; if (D.documentElement) add(); else setTimeout(() => css(txt), 20); };
-  css(`#mtk-pc{left:16px!important;transform:none!important;top:12px!important}.ignielAdBlock,ins,.adsbygoogle,[id^="google_ads"],iframe[src*="doubleclick"]{display:none!important}
+  css(`#mtk-pc{left:16px!important;transform:none!important;top:12px!important}div:has(> select[onchange*="'genre'"]),.ignielAdBlock,ins,.adsbygoogle,[id^="google_ads"],iframe[src*="doubleclick"]{display:none!important}
 a:focus-visible,button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:3px solid #e11d2e!important;outline-offset:2px}
 nav a[href*="/category/"]:not([href*="%D9%85%D8%B5%D8%A7%D8%B1%D8%B9%D8%A9"]):not([href*="مصارعة"]),.dropdown-menu a[href*="/category/"]:not([href*="%D9%85%D8%B5%D8%A7%D8%B1%D8%B9%D8%A9"]):not([href*="مصارعة"]){display:none!important}`);
 
