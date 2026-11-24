@@ -44,7 +44,7 @@
     if (n.nodeType === 3) return brandTxt(n);
     if (n.nodeType !== 1 || /^(SCRIPT|STYLE)$/.test(n.nodeName)) return;
     const w = D.createTreeWalker(n, NodeFilter.SHOW_TEXT); let t; while ((t = w.nextNode())) brandTxt(t);
-    (n.matches && n.matches('img') ? [n] : n.querySelectorAll ? [...n.querySelectorAll('img')] : []).forEach((i) => { if (/sm-deep|logo/i.test(i.src || '')) { i.src = LOGO; i.alt = 'MTK CLASSIC'; i.style.maxHeight = '34px'; } });
+    (n.matches && n.matches('img') ? [n] : n.querySelectorAll ? [...n.querySelectorAll('img')] : []).forEach((i) => { if (/sm-deep|logo/i.test(i.src || '')) { i.src = LOGO; i.alt = 'MTK CLASSIC'; i.style.cssText = 'width:170px;max-width:40vw;height:auto;max-height:40px'; } });
   };
   new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) brand(n); if (BR.test(D.title)) D.title = D.title.replace(BR, 'MTK CLASSIC'); BR.lastIndex = 0; }).observe(D, { childList: true, subtree: true });
 
