@@ -134,9 +134,10 @@ public class MainActivity extends Activity {
                 JSONArray a = new JSONArray(get(APPS));
                 List<App> l = new ArrayList<>();
                 for (int i = 0; i < a.length(); i++) {
-                    JSONObject o = a.getJSONObject(i);
+                    JSONObject o = a.optJSONObject(i);
+                    if (o == null || o.optBoolean("hidden", false) || !o.has("pkg") || !o.has("version")) continue;
                     App x = new App();
-                    x.name = o.getString("name");
+                    x.name = o.optString("name", o.getString("pkg"));
                     x.pkg = o.getString("pkg");
                     x.info = o.optString("info", "");
                     x.color = o.optString("color", "#2563EB");
@@ -192,8 +193,16 @@ public class MainActivity extends Activity {
             row.setBackground(bg(Color.parseColor("#161C28"), 14, 0));
             LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             rp.bottomMargin = dp(10);
-            View dot = new View(this);
-            dot.setBackground(bg(Color.parseColor(x.color), 8, 0));
+            TextView dot = new TextView(this);
+            int c0;
+            try { c0 = Color.parseColor(x.color); } catch (Exception e) { c0 = Color.parseColor("#2563EB"); }
+            dot.setBackground(bg(c0, 8, 0));
+            String ab = x.name.replaceFirst("(?i)^MTK\\s*", "");
+            dot.setText(ab.isEmpty() ? "M" : ab.substring(0, 1).toUpperCase());
+            dot.setTextColor(Color.WHITE);
+            dot.setTextSize(20);
+            dot.setTypeface(null, android.graphics.Typeface.BOLD);
+            dot.setGravity(Gravity.CENTER);
             row.addView(dot, new LinearLayout.LayoutParams(dp(42), dp(42)));
             LinearLayout txt = new LinearLayout(this);
             txt.setOrientation(LinearLayout.VERTICAL);
