@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK KIDS
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.0.1
+// @version      1.1.0
 // @description  MTK KIDS - كرتون بدون إعلانات، تشغيل مباشر، ملفات شخصية، تابع المشاهدة
 // @author       MTK
 // @match        *://cartoony.net/*
@@ -375,6 +375,24 @@ function MTKKIDS() {
           h('a', { class: 'btn big', href: showHref(x), 'data-spa': '' }, icon('play'), ' شاهد'),
           listBtn(x))));
   }
+  function heroes(list) {
+    if (!list.length) return null;
+    if (list.length === 1) return hero(list[0]);
+    let i = 0, t = 0;
+    const slides = list.map((x) => hero(x));
+    const dots = h('div', { class: 'hdots' }, list.map((_, j) => h('i', { onclick: () => step(j - i) })));
+    const paint = () => { slides.forEach((s, j) => s.classList.toggle('on', j === i)); Array.from(dots.children).forEach((d, j) => d.classList.toggle('on', j === i)); };
+    const auto = () => { clearInterval(t); t = setInterval(() => { if (!box.isConnected) return clearInterval(t); if (!(box.contains(D.activeElement) && D.activeElement.matches(':focus-visible'))) { i = (i + 1) % list.length; paint(); } }, 6000); };
+    const step = (d) => { i = (i + d + list.length) % list.length; paint(); auto(); };
+    const box = h('div', { class: 'hcar' }, slides,
+      h('button', { class: 'harr hnext', 'aria-label': 'التالي', onclick: () => step(1) }, icon('prev')),
+      h('button', { class: 'harr hprev', 'aria-label': 'السابق', onclick: () => step(-1) }, icon('next')), dots);
+    let sx = 0;
+    box.addEventListener('touchstart', (e) => { sx = e.touches[0].clientX; }, { passive: true });
+    box.addEventListener('touchend', (e) => { const dx = e.changedTouches[0].clientX - sx; if (Math.abs(dx) > 45) step(dx > 0 ? -1 : 1); }, { passive: true });
+    paint(); auto();
+    return box;
+  }
   function listBtn(x) {
     const b = h('button', { class: 'btn mylist' + (inList(x) ? ' on' : ''), onclick: () => { const on = toggleList(x); b.classList.toggle('on', on); b.lastChild.textContent = on ? ' بقائمتي' : ' قائمتي'; } }, icon('heart'), inList(x) ? ' بقائمتي' : ' قائمتي');
     return b;
@@ -384,7 +402,7 @@ function MTKKIDS() {
     D.title = 'MTK KIDS';
     const seen = new Set(hist().map((e) => e.show));
     const pool = L.filter((x) => x.hero && !seen.has(sk(x)));
-    if (pool.length) main.append(hero(shuffle(pool, day)[0]));
+    if (pool.length) main.append(heroes(shuffle(pool, day).slice(0, 6)));
     const cw = cwEl(); if (cw) main.append(cw);
     const ml = myList().map((k) => L.find((x) => sk(x) === k)).filter(Boolean);
     const add = (r) => r && main.append(r);
@@ -699,6 +717,30 @@ function MTKKIDS() {
     }
   }
 
+  /* ---------- app password (once per device) ---------- */
+  const GATE_H = 'f1626dc324001b104467125a902fcdb4e92c4757c56064507f1d926a39ba13a4';
+  function gate(next) {
+    if (localStorage.getItem('mtk-gate') === GATE_H.slice(0, 16)) return next();
+    sheet.dataset.lock = '1';
+    sheet.textContent = '';
+    const inp = h('input', { type: 'password', class: 'ginp', placeholder: 'كلمة السر', autocomplete: 'off', dir: 'ltr' });
+    const msg = h('div', { class: 'pmsg' });
+    const ok = async () => {
+      const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('mtk-gate:' + inp.value));
+      const hx = Array.from(new Uint8Array(b)).map((x) => x.toString(16).padStart(2, '0')).join('');
+      if (hx !== GATE_H) { msg.textContent = 'كلمة السر غلط'; inp.value = ''; return; }
+      localStorage.setItem('mtk-gate', GATE_H.slice(0, 16));
+      delete sheet.dataset.lock;
+      sheet.classList.remove('open');
+      sheet.textContent = '';
+      next();
+    };
+    sheet.append(h('div', { class: 'panel pgate' }, h('div', { class: 'phead' }, h('b', null, 'أدخل كلمة السر')), msg,
+      h('form', { class: 'gform', onsubmit: (e) => { e.preventDefault(); ok(); } }, inp, h('button', { class: 'btn big', type: 'submit' }, 'دخول'))));
+    sheet.classList.add('open');
+    setTimeout(() => { try { inp.focus(); } catch (e) {} }, 60);
+  }
+
   /* ---------- profiles ---------- */
   function pinPad(title, sub, doneF, back) {
     sheet.textContent = '';
@@ -778,7 +820,7 @@ function MTKKIDS() {
     if (!D.body || !main.isConnected) return setTimeout(boot, 10);
     paintProf();
     route();
-    if (!localStorage.getItem('mtk-picked') || (pins()[pid()] && !sessionStorage.getItem('mtk-unl'))) openProfiles(true);
+    gate(() => { if (!localStorage.getItem('mtk-picked') || (pins()[pid()] && !sessionStorage.getItem('mtk-unl'))) openProfiles(true); });
   };
   boot();
 
@@ -952,6 +994,19 @@ body{max-width:none;padding-bottom:calc(64px + env(safe-area-inset-bottom))}
 .epi{flex-direction:column;align-items:stretch}.ethumb{width:100%}
 .sform{max-width:760px;margin:0 auto}
 }
+.hcar{position:relative}
+.hcar>.hero{display:none}
+.hcar>.hero.on{display:block;animation:hfade .6s ease}
+@keyframes hfade{from{opacity:.25}to{opacity:1}}
+.harr{position:absolute;top:42%;z-index:3;width:42px;height:42px;border-radius:50%;border:0;background:rgba(0,0,0,.45);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.harr .ic{width:24px;height:24px}
+.harr:focus{outline:3px solid var(--acc);background:rgba(0,0,0,.75)}
+.hnext{right:8px}.hprev{left:8px}
+.hdots{position:absolute;bottom:10px;left:0;right:0;display:flex;gap:6px;justify-content:center;z-index:3}
+.hdots i{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.45);cursor:pointer}
+.hdots i.on{background:var(--acc);width:22px;border-radius:4px}
+.gform{display:flex;flex-direction:column;gap:12px;margin-top:12px}
+.ginp{font-size:20px;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--txt);text-align:center}
 `;
   }
 }
