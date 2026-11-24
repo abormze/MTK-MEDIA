@@ -3,6 +3,6 @@
  {"name": "MTK PRIME", "pkg": "com.mtk.prime", "info": "أفلام ومسلسلات عالمية", "color": "#f5c15c", "version": "https://abormze.github.io/MTK-MEDIA/prime/version.json"},
  {"name": "MTK KIDS", "pkg": "com.mtk.kids", "info": "كرتون وسبيستون للأطفال", "color": "#22c55e", "version": "https://abormze.github.io/MTK-MEDIA/kids/version.json"},
  {"name": "MTK ARABIC", "pkg": "com.mtk.arabic", "info": "أفلام عربية ومسلسلات عربية وتركية", "color": "#34d399", "version": "https://abormze.github.io/MTK-MEDIA/arabic/version.json"},
- {"name": "MTK CLASSIC", "pkg": "com.mtk.classic", "info": "مسلسلات وأفلام شوف ماكس", "color": "#de8723", "version": "https://abormze.github.io/MTK-MEDIA/classic/version.json"},
+ {"name": "MTK CLASSIC", "pkg": "com.mtk.classic", "info": "مسلسلات وأفلام عربية كلاسيكية", "color": "#de8723", "version": "https://abormze.github.io/MTK-MEDIA/classic/version.json"},
  {"name": "MTK WWE", "pkg": "com.mtk.wwe", "info": "عروض المصارعة مترجمة", "color": "#e11d2e", "version": "https://abormze.github.io/MTK-MEDIA/wwe/version.json"}
 ]
