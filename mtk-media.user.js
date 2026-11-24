@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK MEDIA
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.11.4
+// @version      1.11.5
 // @description  MTK MEDIA - واجهة موبايل بدون إعلانات لموقع فاصل، تشغيل مباشر من السيرفر الأول
 // @author       MTK
 // @match        *://fasel-hd.co/*
@@ -363,10 +363,16 @@ function MTK() {
     );
     const main = h('main', { id: 'mtk-main' });
     const backBtn = h('button', { class: 'hbtn', id: 'mtk-back', 'aria-label': 'رجوع', onclick: () => history.length > 1 ? history.back() : go('/mobile', true) }, icon('back'));
+    const profBtn = h('button', { class: 'pbtn', 'aria-label': 'الملف', onclick: () => openProfiles() });
+    function paintProf() {
+      const x = prof();
+      profBtn.textContent = '';
+      profBtn.append(h('span', { class: 'pav sm' + (x.k ? ' kid' : '') }, x.n.slice(0, 1)), h('small', null, x.n));
+    }
     const header = h('header', { id: 'mtk-head' },
       backBtn,
       h('a', { class: 'logo', href: '/mobile', 'data-spa': '' }, h('b', null, 'MTK'), ' MEDIA'),
-      h('button', { class: 'hbtn', 'aria-label': 'بحث', onclick: openSearch }, icon('search'))
+      h('div', { class: 'hside' }, profBtn, h('button', { class: 'hbtn', 'aria-label': 'بحث', onclick: openSearch }, icon('search')))
     );
     const tabs = [
       ['home', 'الرئيسية', '/mobile'],
@@ -706,6 +712,7 @@ function MTK() {
     W.addEventListener('popstate', () => go(location.href, false));
 
     go(location.href, false);
+    paintProf();
     if (!localStorage.getItem('mtk-picked')) openProfiles(true);
 
     /* ---------- router ---------- */
@@ -995,6 +1002,7 @@ function MTK() {
         localStorage.setItem('mtk-picked', '1');
         delete sheet.dataset.lock;
         closeSheet();
+        paintProf();
         if (!same) go('/mobile', true);
       };
       const inp = h('input', { type: 'text', placeholder: 'اسم الملف...', maxlength: '20' });
@@ -1205,6 +1213,11 @@ a{color:inherit;text-decoration:none}
 .logo{font-size:20px;font-weight:800;letter-spacing:1px}
 .logo b{background:linear-gradient(90deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
 .hbtn{background:none;border:0;color:var(--txt);width:44px;height:44px;display:grid;place-items:center;border-radius:12px}
+.hside{display:flex;align-items:center;gap:2px}
+#mtk-head .logo{position:absolute;left:50%;transform:translateX(-50%)}
+.pbtn{background:var(--card);border:1px solid var(--line);color:var(--txt);display:flex;align-items:center;gap:6px;border-radius:999px;padding:3px 10px 3px 3px;max-width:96px;font:inherit}
+.pbtn small{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pav.sm{width:28px;height:28px;font-size:14px;border-radius:50%;flex:0 0 auto}
 .hbtn:active{background:var(--card)}
 #mtk-nav{position:fixed;bottom:0;left:0;right:0;z-index:50;display:flex;justify-content:space-around;background:rgba(10,10,16,.96);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid var(--line);padding:6px 0 calc(6px + env(safe-area-inset-bottom));max-width:520px;margin:0 auto}
 #mtk-nav a{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10.5px;white-space:nowrap;min-width:0;color:var(--mut);flex:1;padding:4px 0}
