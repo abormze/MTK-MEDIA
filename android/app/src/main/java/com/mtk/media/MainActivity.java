@@ -77,10 +77,12 @@ public class MainActivity extends Activity {
         runOnUiThread(() -> web.evaluateJavascript("window.__mtkCur?__mtkCur():''", v -> {
             String key = "";
             long start = 0;
+            String up = "";
             try {
                 org.json.JSONObject o = new org.json.JSONObject(new org.json.JSONArray("[" + v + "]").getString(0));
                 key = o.optString("k");
                 start = o.optLong("p");
+                up = o.optString("u");
             } catch (Exception ignored) {}
             android.util.Log.i("MTK", "native key=" + key + " start=" + start + " url=" + url + " hdr=" + hdr.keySet());
             startActivityForResult(new android.content.Intent(this, PlayerActivity.class)
@@ -88,6 +90,7 @@ public class MainActivity extends Activity {
                     .putExtra("hdr", hdr)
                     .putExtra("key", key)
                     .putExtra("start", start)
+                    .putExtra("next", up)
                     .putExtra("ua", web.getSettings().getUserAgentString()), 7);
             web.evaluateJavascript("window.__mtkBack&&window.__mtkBack()", null);
         }));
@@ -107,6 +110,7 @@ public class MainActivity extends Activity {
         String key = data.getStringExtra("key");
         if (key == null || key.isEmpty()) return;
         web.evaluateJavascript("window.__mtkSetPos&&__mtkSetPos(" + org.json.JSONObject.quote(key) + "," + data.getLongExtra("pos", 0) + "," + data.getLongExtra("dur", 0) + ")", null);
+        if (data.getBooleanExtra("goNext", false)) web.evaluateJavascript("window.__mtkNext&&__mtkNext()", null);
     }
 
     private boolean isTv() {

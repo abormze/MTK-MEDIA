@@ -28,7 +28,23 @@ public class PlayerActivity extends Activity {
     private ExoPlayer player;
     private PlayerView view;
     private int retries;
-    private boolean ended, failed;
+    private boolean ended, failed, upCancel, goNext;
+    private String upNext;
+    private android.widget.TextView upView;
+    private final android.os.Handler ui = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable upTick = new Runnable() {
+        @Override
+        public void run() {
+            if (player == null) return;
+            long d = player.getDuration(), p = player.getCurrentPosition();
+            if (upNext != null && !upCancel && d > 60000 && d - p <= 15000) {
+                long left = Math.max(1, (d - p + 999) / 1000);
+                upView.setText(upNext + "\nبعد " + left + " ث  •  OK شغّل الآن  •  رجوع إلغاء");
+                upView.setVisibility(View.VISIBLE);
+            } else upView.setVisibility(View.GONE);
+            ui.postDelayed(this, 500);
+        }
+    };
 
     @Override
     protected void onCreate(Bundle state) {
@@ -84,12 +100,33 @@ public class PlayerActivity extends Activity {
         view.setPlayer(player);
         SubtitleView sv = view.getSubtitleView();
         if (sv != null) sv.setFractionalTextSize(SubtitleView.DEFAULT_TEXT_SIZE_FRACTION * 1.25f);
-        setContentView(view);
+        upNext = getIntent().getStringExtra("next");
+        if (upNext != null && upNext.isEmpty()) upNext = null;
+        float dp = getResources().getDisplayMetrics().density;
+        upView = new android.widget.TextView(this);
+        upView.setTextColor(0xFFFFFFFF);
+        upView.setTextSize(16);
+        upView.setLineSpacing(0, 1.2f);
+        upView.setPadding((int) (18 * dp), (int) (12 * dp), (int) (18 * dp), (int) (12 * dp));
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setColor(0xF00A0A10);
+        bg.setCornerRadius(16 * dp);
+        bg.setStroke((int) (2 * dp), 0xFFFF2D55);
+        upView.setBackground(bg);
+        upView.setVisibility(View.GONE);
+        upView.setOnClickListener(v -> { goNext = true; finish(); });
+        android.widget.FrameLayout root = new android.widget.FrameLayout(this);
+        root.addView(view);
+        android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(-2, -2, android.view.Gravity.BOTTOM | android.view.Gravity.END);
+        lp.setMargins(0, 0, (int) (28 * dp), (int) (90 * dp));
+        root.addView(upView, lp);
+        setContentView(root);
+        ui.post(upTick);
 
         player.addListener(new Player.Listener() {
             @Override
             public void onPlaybackStateChanged(int st) {
-                if (st == Player.STATE_ENDED) { ended = true; finish(); }
+                if (st == Player.STATE_ENDED) { ended = true; goNext = upNext != null && !upCancel; finish(); }
             }
 
             @Override
@@ -114,6 +151,17 @@ public class PlayerActivity extends Activity {
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent e) {
+        if (upView != null && upView.getVisibility() == View.VISIBLE) {
+            int k = e.getKeyCode();
+            if (k == KeyEvent.KEYCODE_DPAD_CENTER || k == KeyEvent.KEYCODE_ENTER) {
+                if (e.getAction() == KeyEvent.ACTION_UP) { goNext = true; finish(); }
+                return true;
+            }
+            if (k == KeyEvent.KEYCODE_BACK) {
+                if (e.getAction() == KeyEvent.ACTION_UP) { upCancel = true; upView.setVisibility(View.GONE); }
+                return true;
+            }
+        }
         if (e.getAction() == KeyEvent.ACTION_DOWN && player != null && !view.isControllerFullyVisible()) {
             switch (e.getKeyCode()) {
                 case KeyEvent.KEYCODE_DPAD_LEFT: player.seekBack(); view.showController(); return true;
@@ -137,6 +185,7 @@ public class PlayerActivity extends Activity {
             setResult(RESULT_OK, new android.content.Intent()
                     .putExtra("key", getIntent().getStringExtra("key"))
                     .putExtra("err", failed)
+                    .putExtra("goNext", goNext && !failed)
                     .putExtra("pos", p / 1000)
                     .putExtra("dur", d > 0 ? d / 1000 : 0));
         }
@@ -151,6 +200,7 @@ public class PlayerActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        ui.removeCallbacks(upTick);
         if (player != null) { player.release(); player = null; }
         super.onDestroy();
     }

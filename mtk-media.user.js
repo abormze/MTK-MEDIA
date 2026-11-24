@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK MEDIA
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.8.0
+// @version      1.9.0
 // @description  MTK MEDIA - واجهة موبايل بدون إعلانات لموقع فاصل، تشغيل مباشر من السيرفر الأول
 // @author       MTK
 // @match        *://fasel-hd.co/*
@@ -222,8 +222,13 @@ function MTK() {
       const v = D.querySelector('video');
       if (v && v.duration > 60 && v.currentTime > 5 && (!RT || sought)) try { parent.postMessage({ mtk: 'pos', p: v.currentTime, d: v.duration }, '*'); } catch (e) {}
     };
-    setInterval(rep, 5000);
+    let tick = 0;
+    setInterval(() => {
+      const v = D.querySelector('video');
+      if (++tick % 5 === 0 || (v && v.duration > 60 && v.duration - v.currentTime < 25)) rep();
+    }, 1000);
     D.addEventListener('pause', rep, true);
+    D.addEventListener('ended', () => { try { parent.postMessage({ mtk: 'end' }, '*'); } catch (e) {} }, true);
     new MutationObserver(() => { addCss(); sweep(); tryPlay(); }).observe(D, { childList: true, subtree: true });
     D.addEventListener('DOMContentLoaded', () => { sweep(); tryPlay(); });
     let n = 0;
@@ -422,14 +427,53 @@ function MTK() {
       e.p = Math.floor(p); if (d > 0) e.d = Math.floor(d); e.at = Date.now();
       saveH([e].concat(all.filter((x) => x !== e)));
     }
+    const TK = 'mtk-taste';
+    const taste = () => { try { const t = JSON.parse(localStorage.getItem(TK)); if (t && t.g && t.r) return t; } catch (e) {} return { g: {}, r: [] }; };
+    function learn(m) {
+      const t = taste();
+      (m.g || []).forEach((g) => { const o = t.g[g.n] || (t.g[g.n] = { c: 0, u: '' }); o.c++; if (g.u) o.u = g.u; });
+      const seen = new Set();
+      t.r = (m.rel || []).map((c) => ({ href: c.href, img: c.img, title: c.title, ep: c.ep })).concat(t.r)
+        .filter((c) => c.href && !seen.has(c.href) && seen.add(c.href)).slice(0, 60);
+      try { localStorage.setItem(TK, JSON.stringify(t)); } catch (e) {}
+    }
+    const watched = () => new Set(hist().map((x) => sidOf(x.href)));
+    const topGenres = () => Object.entries(taste().g).filter(([, o]) => o.u).sort((a, b) => b[1].c - a[1].c).slice(0, 2);
+
+    let curUp = null, upCancel = false, upT = 0, upBox = null;
+    function hideUp() { clearInterval(upT); if (upBox) upBox.remove(); upBox = null; }
+    function playUp() {
+      const u = curUp;
+      hideUp();
+      if (!u) return;
+      curUp = null;
+      openFS();
+      go(u.href, true, true);
+    }
+    function showUp() {
+      if (upBox || !curUp || upCancel || !fsOn) return;
+      let n = 10;
+      const cnt = h('b', null, String(n));
+      const go_ = h('button', { class: 'upgo', onclick: playUp }, icon('play'), ' شغّل الآن');
+      upBox = h('div', { class: 'upn' },
+        curUp.img ? h('img', { src: curUp.img, alt: '', referrerpolicy: 'no-referrer-when-downgrade' }) : null,
+        h('div', { class: 'upt' }, h('small', null, curUp.label, ' بعد ', cnt, ' ث'), h('div', null, curUp.title)),
+        h('div', { class: 'upb' }, go_, h('button', { class: 'upx', onclick: () => { upCancel = true; hideUp(); } }, 'إلغاء')));
+      fsBox.append(upBox);
+      try { go_.focus({ preventScroll: true }); } catch (e) {}
+      upT = setInterval(() => { if (--n <= 0) playUp(); else cnt.textContent = String(n); }, 1000);
+    }
     W.addEventListener('message', (ev) => {
       const m = ev.data;
-      if (m && m.mtk === 'pos' && fsOn && curSid) setPos(curSid, m.p, m.d);
+      if (!m || !fsOn) return;
+      if (m.mtk === 'pos' && curSid) { setPos(curSid, m.p, m.d); if (m.d > 60 && m.d - m.p <= 20) showUp(); }
+      if (m.mtk === 'end' && curUp && !upCancel) playUp();
     });
     W.__mtkCur = () => {
       const x = hist().find((y) => y.sid === curSid);
-      return JSON.stringify({ k: curSid || '', p: x && x.p > 30 && !done(x) ? x.p : 0 });
+      return JSON.stringify({ k: curSid || '', p: x && x.p > 30 && !done(x) ? x.p : 0, u: curUp && !upCancel ? curUp.label + ': ' + curUp.title : '' });
     };
+    W.__mtkNext = () => { if (curUp) playUp(); };
     W.__mtkSetPos = (k, p, d) => { setPos(k, p, d); refreshCW(); };
     W.__mtkBack = () => { if (fsOn) { closeFS(); return true; } return false; };
     let lastPlay = null;
@@ -493,7 +537,11 @@ function MTK() {
       if (!fsOn) return;
       fsBox.textContent = '';
       lastPlay = [src, next, meta];
+      hideUp();
+      curUp = (meta && meta.up) || null;
+      upCancel = false;
       if (meta) {
+        learn(meta);
         const e = record(meta);
         if (e.p > 30 && !done(e)) src = src.split('#')[0] + '#mtkt=' + e.p;
       }
@@ -507,6 +555,7 @@ function MTK() {
       showUI();
     }
     function closeFS() {
+      hideUp();
       if (!fsOn) return;
       fsOn = false;
       fsNative = false;
@@ -662,6 +711,19 @@ function MTK() {
       return s ? abs(s, base) : '';
     }
 
+    function genresOf(doc, base) {
+      const out = [];
+      doc.querySelectorAll('#singleList span, #singleList li, .singleInfo span').forEach((s) => {
+        const t = s.textContent;
+        if (!/تصنيف|النوع|genre/i.test(t) || t.length > 200) return;
+        const as = s.querySelectorAll('a[href]');
+        if (as.length) as.forEach((a) => { const n = txt(a); if (n && n.length < 30) out.push({ n, u: abs(a.getAttribute('href'), base) }); });
+        else txt(s).replace(/^[^:]*:\s*/, '').split(/[،,|\/]/).map((x) => x.trim()).filter((x) => x && x.length < 30).forEach((n) => out.push({ n, u: '' }));
+      });
+      const seen = new Set();
+      return out.filter((g) => !seen.has(g.n) && seen.add(g.n)).slice(0, 4);
+    }
+
     /* ---------- views ---------- */
     function cardEl(c, wide) {
       return h('a', { class: 'card' + (wide || c.ep ? ' wide' : ''), href: c.href, 'data-spa': '' },
@@ -676,6 +738,26 @@ function MTK() {
       return h('section', { class: 'row' },
         h('div', { class: 'rhead' }, h('h3', null, g.title || 'المزيد'), g.more ? h('a', { href: g.more, 'data-spa': '' }, 'الكل') : null),
         h('div', { class: 'scroller' }, g.items.map((c) => cardEl(c))));
+    }
+    function forYou(after) {
+      const seenW = watched();
+      const fresh = (c) => !seenW.has(sidOf(c.href));
+      const sug = taste().r.filter(fresh).slice(0, 20);
+      let at = after;
+      const put = (el) => { if (at && at.parentNode === main) at.after(el); else main.append(el); at = el; };
+      if (sug.length) put(rowEl({ title: 'مقترح لك', items: sug }));
+      const tok = navToken;
+      topGenres().forEach(([n, o]) => {
+        const slot = h('div');
+        put(slot);
+        load(o.u).then((r) => {
+          if (tok !== navToken) return;
+          const g2 = groups(r.doc, r.url);
+          const big = g2.reduce((a, b) => (b.items.length > a.items.length ? b : a), g2[0] || { items: [] });
+          const items = big.items.filter(fresh).slice(0, 20);
+          if (items.length) slot.replaceWith(rowEl({ title: 'لأنك بتحب ' + n, more: o.u, items })); else slot.remove();
+        }, () => slot.remove());
+      });
     }
     function render(doc, base, fs) {
       main.textContent = '';
@@ -696,6 +778,7 @@ function MTK() {
       }
       if (isHome) {
         gs.forEach((g, i) => { main.append(rowEl(g)); if (i === 0 || gs.length === 1) { const c = cwEl(); if (c && !D.getElementById('mtk-cw')) main.append(c); } });
+        forYou(D.getElementById('mtk-cw') || main.firstChild);
         return;
       }
       let biggest = gs.reduce((a, b) => (b.items.length > a.items.length && !b.slider ? b : a), gs.find((g) => !g.slider) || gs[0]);
@@ -750,7 +833,26 @@ function MTK() {
       const nxt = curIdx >= 0 && eps[curIdx + 1] ? abs(eps[curIdx + 1].getAttribute('href'), base) : '';
       const epName = (a) => a ? 'ح' + (txt(a).replace(/الحلقة\s*/, '').trim()) : '';
       const ser = eps.length ? (poster || title) : '';
-      const meta = { href: base, title, poster, ep: curIdx >= 0 ? epName(eps[curIdx]) : '', ser };
+      const seasons = Array.from(doc.querySelectorAll('.seasonDiv')).map((el) => {
+        const c = parseCard(el, base);
+        if (c) c.on = el.classList.contains('active');
+        return c;
+      }).filter(Boolean);
+      const seasonHrefs = new Set(seasons.map((s) => s.href));
+      const rel = [];
+      const seen = new Set();
+      doc.querySelectorAll('.postDiv, .blockMovie, .epDivHome').forEach((el) => {
+        const c = parseCard(el, base);
+        if (c && !seen.has(c.href) && !seasonHrefs.has(c.href)) { seen.add(c.href); rel.push(c); }
+      });
+      const sIdx = seasons.findIndex((c) => c.on);
+      const seenW = watched();
+      let up = null;
+      if (nxt) up = { href: nxt, title: title + ' • ' + epName(eps[curIdx + 1]), img: poster, label: 'الحلقة التالية' };
+      else if (eps.length && sIdx >= 0 && seasons[sIdx + 1]) up = { href: seasons[sIdx + 1].href, title: seasons[sIdx + 1].title || title, img: seasons[sIdx + 1].img || poster, label: 'الموسم التالي' };
+      else if (!eps.length) { const c = rel.find((x) => !x.ep && !seenW.has(sidOf(x.href))); if (c) up = { href: c.href, title: c.title, img: c.img, label: 'الفيلم التالي' }; }
+      const g = genresOf(doc, base);
+      const meta = { href: base, title, poster, ep: curIdx >= 0 ? epName(eps[curIdx]) : '', ser, up, g, rel: rel.slice(0, 12) };
 
       if (hasPlayer) {
         const src = firstServer(doc, base);
@@ -765,7 +867,8 @@ function MTK() {
           if (tok !== navToken) return;
           const src = firstServer(r.doc, r.url);
           const e2 = r.doc.querySelectorAll('#epAll a[href], .epAll a[href]');
-          if (src) playFS(src, e2[1] ? abs(e2[1].getAttribute('href'), r.url) : '', { href: r.url, title, poster, ep: epName(eps[0]), ser }); else closeFS();
+          const n1 = e2[1] ? abs(e2[1].getAttribute('href'), r.url) : '';
+          if (src) playFS(src, n1, { href: r.url, title, poster, ep: epName(eps[0]), ser, g, rel: rel.slice(0, 12), up: n1 ? { href: n1, title: title + ' • ' + epName(e2[1]), img: poster, label: 'الحلقة التالية' } : null }); else closeFS();
         }, () => closeFS());
       } else if (fs) closeFS();
 
@@ -784,23 +887,11 @@ function MTK() {
         main.append(h('section', { class: 'row' }, h('div', { class: 'rhead' }, h('h3', null, 'الحلقات (' + eps.length + ')')), h('div', { class: 'eps' }, epLinks)));
       }
 
-      const seasons = Array.from(doc.querySelectorAll('.seasonDiv')).map((el) => {
-        const c = parseCard(el, base);
-        if (c) c.on = el.classList.contains('active');
-        return c;
-      }).filter(Boolean);
       if (seasons.length) {
         main.append(h('section', { class: 'row' }, h('div', { class: 'rhead' }, h('h3', null, 'المواسم')),
           h('div', { class: 'scroller' }, seasons.map((c) => { const e = cardEl(c); if (c.on) e.classList.add('on'); return e; }))));
       }
 
-      const seasonHrefs = new Set(seasons.map((s) => s.href));
-      const rel = [];
-      const seen = new Set();
-      doc.querySelectorAll('.postDiv, .blockMovie, .epDivHome').forEach((el) => {
-        const c = parseCard(el, base);
-        if (c && !seen.has(c.href) && !seasonHrefs.has(c.href)) { seen.add(c.href); rel.push(c); }
-      });
       if (rel.length) main.append(rowEl({ title: 'قد يعجبك', items: rel.slice(0, 20) }));
     }
 
@@ -874,6 +965,18 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(-
 #mtk-fs .fsx{position:absolute;top:calc(10px + env(safe-area-inset-top));left:10px;z-index:3;background:rgba(0,0,0,.55);border-radius:50%;color:#fff}
 #mtk-fs .fsn{position:absolute;top:calc(10px + env(safe-area-inset-top));right:10px;z-index:3;display:flex;align-items:center;gap:4px;background:rgba(0,0,0,.55);color:#fff;border-radius:20px;padding:8px 12px;font-size:13px;font-weight:700}
 html.fs,html.fs body{overflow:hidden!important}
+#mtk-fs .upn{position:absolute;right:16px;bottom:calc(24px + env(safe-area-inset-bottom));z-index:4;display:flex;align-items:center;gap:12px;max-width:min(460px,calc(100% - 32px));background:rgba(10,10,16,.94);border:1px solid var(--line);border-radius:16px;padding:10px;box-shadow:0 8px 30px rgba(0,0,0,.6);animation:upin .35s ease-out}
+#mtk-fs .upn img{width:64px;aspect-ratio:2/3;object-fit:cover;border-radius:8px;flex:none}
+#mtk-fs .upt{min-width:0;flex:1;font-size:14px;font-weight:700;line-height:1.4}
+#mtk-fs .upt small{display:block;color:var(--mut);font-weight:400;font-size:12px}
+#mtk-fs .upt small b{color:var(--acc2)}
+#mtk-fs .upt div{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#mtk-fs .upb{display:flex;flex-direction:column;gap:6px;flex:none}
+#mtk-fs .upb button{border:0;border-radius:10px;padding:8px 12px;font:inherit;font-size:13px;font-weight:700;color:#fff;display:flex;align-items:center;justify-content:center;gap:4px}
+#mtk-fs .upgo{background:linear-gradient(90deg,var(--acc),#ff5e3a)}
+#mtk-fs .upx{background:rgba(255,255,255,.12)}
+#mtk-fs .upb .ic{width:16px;height:16px}
+@keyframes upin{from{transform:translateY(20px);opacity:0}to{transform:none;opacity:1}}
 .single{display:flex;gap:12px;padding:14px}
 .poster{width:96px;aspect-ratio:2/3;object-fit:cover;border-radius:10px;flex:none}
 .sinfo{min-width:0}
