@@ -1,0 +1,50 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.mtk.kids'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.mtk.kids'
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName '1.0'
+    }
+    signingConfigs {
+        release {
+            if (System.getenv('MTK_KS')) {
+                storeFile file(System.getenv('MTK_KS'))
+                storePassword System.getenv('MTK_KS_PASS')
+                keyAlias 'mtk'
+                keyPassword System.getenv('MTK_KS_PASS')
+                enableV1Signing true
+                enableV2Signing true
+                enableV3Signing true
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (System.getenv('MTK_KS')) signingConfig signingConfigs.release
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.11.0'
+    implementation 'androidx.media3:media3-exoplayer:1.4.1'
+    implementation 'androidx.media3:media3-exoplayer-hls:1.4.1'
+    implementation 'androidx.media3:media3-ui:1.4.1'
+}
+
+tasks.register('copyUserscript', Copy) {
+    from "$rootDir/../mtk-kids.user.js"
+    from "$projectDir/adhosts.txt"
+    into "$projectDir/src/main/assets"
+}
+preBuild.dependsOn 'copyUserscript'
