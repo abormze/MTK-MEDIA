@@ -217,6 +217,7 @@ public class MainActivity extends Activity {
                         && native_(u.toString(), r.getRequestHeaders())) {
                     return new WebResourceResponse("text/plain", "utf-8", 204, "No Content", new HashMap<>(), new ByteArrayInputStream(new byte[0]));
                 }
+                if ("GET".equals(r.getMethod()) && Doh.wanted(u.getHost())) return Doh.fetch(u.toString(), r.getRequestHeaders());
                 return null;
             }
 

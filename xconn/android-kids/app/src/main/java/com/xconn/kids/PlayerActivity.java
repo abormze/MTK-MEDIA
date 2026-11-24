@@ -95,10 +95,16 @@ public class PlayerActivity extends Activity {
                 .setReadTimeoutMs(20000)
                 .setDefaultRequestProperties(hdr);
         if (ua != null) http.setUserAgent(ua);
+        androidx.media3.datasource.DataSource.Factory src = http;
+        if (Doh.wanted(Uri.parse(url).getHost())) {
+            androidx.media3.datasource.okhttp.OkHttpDataSource.Factory ok = new androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(Doh.client).setDefaultRequestProperties(hdr);
+            if (ua != null) ok.setUserAgent(ua);
+            src = ok;
+        }
 
         DefaultRenderersFactory rf = new DefaultRenderersFactory(this).setEnableDecoderFallback(true);
         player = new ExoPlayer.Builder(this, rf)
-                .setMediaSourceFactory(new DefaultMediaSourceFactory(http))
+                .setMediaSourceFactory(new DefaultMediaSourceFactory(src))
                 .setSeekBackIncrementMs(10000)
                 .setSeekForwardIncrementMs(10000)
                 .build();

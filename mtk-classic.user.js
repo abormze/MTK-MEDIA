@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK CLASSIC
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.0.1
+// @version      1.0.2
 // @description  MTK CLASSIC - shoofmax بدون إعلانات، تشغيل مباشر، ملفات وPIN، تابع المشاهدة، الحلقة التالية تلقائياً
 // @match        *://shoofmax.com/*
 // @match        *://*.shoofmax.com/*
@@ -34,7 +34,7 @@
   };
   try { Object.defineProperty(W, 'RadiantMP', { configurable: true, get: () => RMP, set: (v) => { RMP = wrap(v); } }); } catch (e) {}
   const css = (txt) => { const add = () => { const s = D.createElement('style'); s.textContent = txt; (D.head || D.documentElement).appendChild(s); }; if (D.documentElement) add(); else setTimeout(() => css(txt), 20); };
-  css('#mtk-pc{left:16px!important;transform:none!important;top:12px!important}ins,.adsbygoogle,#CybotCookiebotDialog,[id^="google_ads"],.ad-container,.ads-container,.rmp-ad-container{display:none!important}a:focus-visible,button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:3px solid #de8723!important;outline-offset:2px}');
+  css('#mtk-pc{left:16px!important;transform:none!important;top:12px!important}ins,.adsbygoogle,#CybotCookiebotDialog,[id^="google_ads"],.ad-container,.ads-container,.rmp-ad-container{display:none!important}a:focus,button:focus,input:focus,select:focus,[tabindex]:focus{outline:4px solid #e50914!important;outline-offset:-4px!important}.mtk-foc{z-index:5!important}.mtk-foc::after{content:"";position:absolute;inset:0;border:4px solid #e50914;border-radius:inherit;box-shadow:0 0 18px rgba(229,9,20,.8);pointer-events:none;z-index:99}');
 
   // branding
   const LOGO = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="320" height="64" viewBox="0 0 320 64"><defs><linearGradient id="g"><stop offset="0" stop-color="#f5c15c"/><stop offset="1" stop-color="#de8723"/></linearGradient></defs><text x="0" y="46" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="44" fill="url(#g)">MTK</text><text x="120" y="46" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="44" fill="#fff">CLASSIC</text></svg>');
@@ -241,6 +241,14 @@ html.mtk-on #mtk-pc{display:none}`);
   if (D.readyState === 'loading') D.addEventListener('DOMContentLoaded', autoPlay); else autoPlay();
 
   // TV remote: spatial navigation
+  D.addEventListener('focusin', (e) => {
+    const t = e.target;
+    D.querySelectorAll('.mtk-foc').forEach((x) => { if (x !== t) { x.classList.remove('mtk-foc'); if (x.dataset.mtkRel) { x.style.position = ''; delete x.dataset.mtkRel; } } });
+    if (!t || !t.classList || t === D.body || t.nodeName === 'INPUT' || t.nodeName === 'SELECT') return;
+    if (getComputedStyle(t).position === 'static') { t.style.position = 'relative'; t.dataset.mtkRel = '1'; }
+    t.classList.add('mtk-foc');
+  }, true);
+  D.addEventListener('focusout', (e) => { const t = e.target; if (t && t.classList) { t.classList.remove('mtk-foc'); if (t.dataset && t.dataset.mtkRel) { t.style.position = ''; delete t.dataset.mtkRel; } } }, true);
   const FOC = 'a[href],button,input,select,[tabindex]:not([tabindex="-1"])';
   const scopeOf = () => (ov && ov.classList.contains('on') ? ov : D.getElementById('mtk-up') || D);
   W.addEventListener('keydown', (e) => {
