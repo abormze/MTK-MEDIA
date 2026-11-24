@@ -30,7 +30,28 @@ public class PlayerActivity extends Activity {
     private int retries;
     private boolean ended, failed, upCancel, goNext;
     private String upNext;
-    private android.widget.TextView upView;
+    private android.widget.TextView upView, skipView;
+    private static final float[] RATES = {1f, 1.25f, 1.5f, 0.75f};
+    private static final int[] SLEEPS = {0, 30, 60, 90};
+    private int rateI, sleepI;
+    private final Runnable sleepR = () -> { if (this.player != null) this.player.pause(); finish(); };
+    private final Runnable skipTick = new Runnable() {
+        @Override
+        public void run() {
+            if (player == null || skipView == null) return;
+            long p = player.getCurrentPosition();
+            skipView.setVisibility(upNext != null && p > 3000 && p < 240000 ? View.VISIBLE : View.GONE);
+            ui.postDelayed(this, 1000);
+        }
+    };
+
+    private void toast(String t) { Toast.makeText(this, t, Toast.LENGTH_SHORT).show(); }
+
+    private void skipIntro() {
+        player.seekTo(player.getCurrentPosition() + 85000);
+        skipView.setVisibility(View.GONE);
+        toast("تخطّينا المقدمة");
+    }
     private final android.os.Handler ui = new android.os.Handler(android.os.Looper.getMainLooper());
     private final Runnable upTick = new Runnable() {
         @Override
@@ -120,8 +141,25 @@ public class PlayerActivity extends Activity {
         android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(-2, -2, android.view.Gravity.BOTTOM | android.view.Gravity.END);
         lp.setMargins(0, 0, (int) (28 * dp), (int) (90 * dp));
         root.addView(upView, lp);
+        skipView = new android.widget.TextView(this);
+        skipView.setText("تخطّي المقدمة  ▼");
+        skipView.setTextColor(0xFFFFFFFF);
+        skipView.setTextSize(16);
+        skipView.setPadding((int) (18 * dp), (int) (10 * dp), (int) (18 * dp), (int) (10 * dp));
+        android.graphics.drawable.GradientDrawable sbg = new android.graphics.drawable.GradientDrawable();
+        sbg.setColor(0xD0141414);
+        sbg.setCornerRadius(6 * dp);
+        sbg.setStroke((int) (2 * dp), 0xFFFFFFFF);
+        skipView.setBackground(sbg);
+        skipView.setVisibility(View.GONE);
+        skipView.setOnClickListener(v -> skipIntro());
+        android.widget.FrameLayout.LayoutParams sp = new android.widget.FrameLayout.LayoutParams(-2, -2, android.view.Gravity.BOTTOM | android.view.Gravity.START);
+        sp.setMargins((int) (28 * dp), 0, 0, (int) (90 * dp));
+        root.addView(skipView, sp);
         setContentView(root);
         ui.post(upTick);
+        ui.postDelayed(skipTick, 1000);
+        Toast.makeText(this, "▲ السرعة    ▼ تخطّي المقدمة    ☰ مؤقّت النوم", Toast.LENGTH_LONG).show();
 
         player.addListener(new Player.Listener() {
             @Override
@@ -166,6 +204,21 @@ public class PlayerActivity extends Activity {
             switch (e.getKeyCode()) {
                 case KeyEvent.KEYCODE_DPAD_LEFT: player.seekBack(); view.showController(); return true;
                 case KeyEvent.KEYCODE_DPAD_RIGHT: player.seekForward(); view.showController(); return true;
+                case KeyEvent.KEYCODE_DPAD_UP:
+                    rateI = (rateI + 1) % RATES.length;
+                    player.setPlaybackSpeed(RATES[rateI]);
+                    toast("السرعة " + RATES[rateI] + "x");
+                    return true;
+                case KeyEvent.KEYCODE_DPAD_DOWN:
+                    if (player.getCurrentPosition() < 300000) skipIntro(); else view.showController();
+                    return true;
+                case KeyEvent.KEYCODE_MENU:
+                case KeyEvent.KEYCODE_INFO:
+                case KeyEvent.KEYCODE_PROG_RED:
+                    sleepI = (sleepI + 1) % SLEEPS.length;
+                    ui.removeCallbacks(sleepR);
+                    if (SLEEPS[sleepI] > 0) { ui.postDelayed(sleepR, SLEEPS[sleepI] * 60000L); toast("بيوقف بعد " + SLEEPS[sleepI] + " دقيقة"); } else toast("مؤقّت النوم مطفي");
+                    return true;
                 case KeyEvent.KEYCODE_DPAD_CENTER:
                 case KeyEvent.KEYCODE_ENTER:
                     if (player.isPlaying()) player.pause(); else player.play();
@@ -201,6 +254,8 @@ public class PlayerActivity extends Activity {
     @Override
     protected void onDestroy() {
         ui.removeCallbacks(upTick);
+        ui.removeCallbacks(skipTick);
+        ui.removeCallbacks(sleepR);
         if (player != null) { player.release(); player = null; }
         super.onDestroy();
     }

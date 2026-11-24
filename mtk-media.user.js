@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK MEDIA
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.10.0
+// @version      1.11.0
 // @description  MTK MEDIA - واجهة موبايل بدون إعلانات لموقع فاصل، تشغيل مباشر من السيرفر الأول
 // @author       MTK
 // @match        *://fasel-hd.co/*
@@ -220,7 +220,7 @@ function MTK() {
     D.addEventListener('playing', (e) => seekRT(e.target), true);
     const rep = () => {
       const v = D.querySelector('video');
-      if (v && v.duration > 60 && v.currentTime > 5 && (!RT || sought)) try { parent.postMessage({ mtk: 'pos', p: v.currentTime, d: v.duration }, '*'); } catch (e) {}
+      if (v && v.duration > 60 && v.currentTime > 5 && (!RT || sought)) try { parent.postMessage({ mtk: 'pos', p: v.currentTime, d: v.duration, r: v.playbackRate }, '*'); } catch (e) {}
     };
     let tick = 0;
     setInterval(() => {
@@ -228,6 +228,16 @@ function MTK() {
       if (++tick % 5 === 0 || (v && v.duration > 60 && v.duration - v.currentTime < 25)) rep();
     }, 1000);
     D.addEventListener('pause', rep, true);
+    let RATE = 1;
+    W.addEventListener('message', (e) => {
+      const m = e.data;
+      if (!m || !m.mtk2) return;
+      const v = D.querySelector('video');
+      if (m.rate) { RATE = m.rate; if (v) v.playbackRate = RATE; }
+      if (m.seek && v && v.duration) v.currentTime = Math.min(v.duration - 5, v.currentTime + m.seek);
+      D.querySelectorAll('iframe').forEach((f) => { try { f.contentWindow.postMessage(m, '*'); } catch (x) {} });
+    });
+    D.addEventListener('playing', (e) => { if (RATE !== 1 && e.target.playbackRate !== RATE) e.target.playbackRate = RATE; }, true);
     D.addEventListener('ended', () => { try { parent.postMessage({ mtk: 'end' }, '*'); } catch (e) {} }, true);
     new MutationObserver(() => { addCss(); sweep(); tryPlay(); }).observe(D, { childList: true, subtree: true });
     D.addEventListener('DOMContentLoaded', () => { sweep(); tryPlay(); });
@@ -258,6 +268,7 @@ function MTK() {
       ['تاريخي', ['تاريخي'], ['history']], ['سيرة ذاتية', ['سيرة-ذاتية', 'سيرة ذاتية'], ['biography']], ['وثائقي', ['وثائقي'], ['documentary']],
       ['رياضي', ['رياضي', 'رياضة'], ['sport']], ['موسيقي', ['موسيقي', 'موسيقى'], ['music', 'musical']],
     ];
+    const KIDS_G = ['رسوم متحركة', 'عائلي', 'مغامرة', 'فانتازيا', 'كوميدي'];
     const learnedG = (t) => Object.entries(taste().g).filter(([, o]) => o.u && (t === 'm' ? /\/movies-cats\//.test(o.u) : /\/series_genres\//.test(o.u)));
     const norm = (x) => String(x).replace(/[أإآ]/g, 'ا').replace(/[-_\s]+/g, ' ').trim().toLowerCase();
     function genreUrls(t, n) {
@@ -286,6 +297,7 @@ function MTK() {
     function genreChips(t) {
       const have = new Set(GENRES.map((g) => norm(g[0])));
       const extra = learnedG(t).map(([k]) => k).filter((k) => !have.has(norm(k)) && !GENRES.some((g) => g[t === 'm' ? 1 : 2].some((x) => norm(x) === norm(k))));
+      if (kids()) return KIDS_G.map((n) => h('a', { class: 'chip', href: '/mtk-genre?t=' + t + '&n=' + encodeURIComponent(n), 'data-spa': '' }, n));
       return GENRES.map((g) => g[0]).concat(extra).map((n) => h('a', { class: 'chip', href: '/mtk-genre?t=' + t + '&n=' + encodeURIComponent(n), 'data-spa': '' }, n));
     }
 
@@ -446,10 +458,26 @@ function MTK() {
 
     /* ---------- watch history ---------- */
     const HK = 'mtk-hist';
-    const hist = () => { try { return JSON.parse(localStorage.getItem(HK)) || []; } catch (e) { return []; } };
-    const saveH = (x) => { try { localStorage.setItem(HK, JSON.stringify(x.slice(0, 30))); } catch (e) {} };
+    const hist = () => { try { return JSON.parse(localStorage.getItem(pk(HK))) || []; } catch (e) { return []; } };
+    const saveH = (x) => { try { localStorage.setItem(pk(HK), JSON.stringify(x.slice(0, 30))); } catch (e) {} };
     const sidOf = (u) => { try { const x = new URL(u, ORIGIN); return decodeURIComponent(x.pathname + x.search); } catch (e) { return u; } };
     let curSid = '';
+    const PROFS = 'mtk-profs';
+    const profs = () => { try { return JSON.parse(localStorage.getItem(PROFS)) || []; } catch (e) { return []; } };
+    const pid = () => localStorage.getItem('mtk-prof') || '';
+    const prof = () => profs().find((x) => x.id === pid()) || { id: '', n: 'الرئيسي' };
+    const kids = () => !!prof().k;
+    const pk = (k) => (pid() ? k + '@' + pid() : k);
+    const LK = 'mtk-list';
+    const myList = () => { try { return JSON.parse(localStorage.getItem(pk(LK))) || []; } catch (e) { return []; } };
+    const inList = (u) => myList().some((x) => sidOf(x.href) === sidOf(u));
+    function toggleList(c) {
+      const sd = sidOf(c.href), l = myList(), has = l.some((x) => sidOf(x.href) === sd);
+      const n = has ? l.filter((x) => sidOf(x.href) !== sd) : [{ href: c.href, img: c.img, title: c.title }].concat(l);
+      try { localStorage.setItem(pk(LK), JSON.stringify(n.slice(0, 100))); } catch (e) {}
+      return !has;
+    }
+    function unHist(sid) { saveH(hist().filter((x) => x.sid !== sid)); refreshCW(); }
     const done = (x) => x.d && x.p > x.d - 150;
     function record(m) {
       const sid = sidOf(m.href);
@@ -469,14 +497,14 @@ function MTK() {
       saveH([e].concat(all.filter((x) => x !== e)));
     }
     const TK = 'mtk-taste';
-    const taste = () => { try { const t = JSON.parse(localStorage.getItem(TK)); if (t && t.g && t.r) return t; } catch (e) {} return { g: {}, r: [] }; };
+    const taste = () => { try { const t = JSON.parse(localStorage.getItem(pk(TK))); if (t && t.g && t.r) return t; } catch (e) {} return { g: {}, r: [] }; };
     function learn(m) {
       const t = taste();
       (m.g || []).forEach((g) => { const o = t.g[g.n] || (t.g[g.n] = { c: 0, u: '' }); o.c++; if (g.u) o.u = g.u; });
       const seen = new Set();
       t.r = (m.rel || []).map((c) => ({ href: c.href, img: c.img, title: c.title, ep: c.ep })).concat(t.r)
         .filter((c) => c.href && !seen.has(c.href) && seen.add(c.href)).slice(0, 60);
-      try { localStorage.setItem(TK, JSON.stringify(t)); } catch (e) {}
+      try { localStorage.setItem(pk(TK), JSON.stringify(t)); } catch (e) {}
     }
     const watched = () => new Set(hist().map((x) => sidOf(x.href)));
     const topGenres = () => Object.entries(taste().g).filter(([, o]) => o.u).sort((a, b) => b[1].c - a[1].c).slice(0, 2);
@@ -507,6 +535,7 @@ function MTK() {
     W.addEventListener('message', (ev) => {
       const m = ev.data;
       if (!m || !fsOn) return;
+      if (m.mtk === 'pos' && rate !== 1 && m.r !== rate) { const f = fsBox.querySelector('iframe'); try { f.contentWindow.postMessage({ mtk2: 1, rate }, '*'); } catch (e) {} }
       if (m.mtk === 'pos' && curSid) { setPos(curSid, m.p, m.d); if (m.d > 60 && m.d - m.p <= 20) showUp(); }
       if (m.mtk === 'end' && curUp && !upCancel) playUp();
     });
@@ -528,6 +557,7 @@ function MTK() {
           h('div', { class: 'thumb' },
             x.poster ? h('img', { src: x.poster, loading: 'lazy', alt: '', referrerpolicy: 'no-referrer-when-downgrade' }) : null,
             h('span', { class: 'pl' }, icon('play')),
+            h('span', { class: 'cwx', role: 'button', tabindex: '0', 'aria-label': 'شيل', onclick: (e) => { e.preventDefault(); e.stopPropagation(); unHist(x.sid); }, onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); unHist(x.sid); } } }, icon('close')),
             x.d ? h('span', { class: 'cwb' }, h('i', { style: 'width:' + Math.min(100, Math.round(x.p * 100 / x.d)) + '%' })) : null),
           h('div', { class: 'ctitle' }, x.title),
           h('div', { class: 'cws' }, [x.ep, x.p > 60 && !done(x) ? 'كمّل من ' + Math.floor(x.p / 60) + ' د' : ''].filter(Boolean).join(' • '))))));
@@ -593,11 +623,28 @@ function MTK() {
       const nx = next ? h('a', { class: 'fsn playfs', href: next }, 'الحلقة التالية ', icon('next')) : null;
       const pv = meta && meta.prv ? h('a', { class: 'fsn fsp playfs', href: meta.prv }, icon('prev'), ' الحلقة السابقة') : null;
       [nx, pv].forEach((a) => a && a.addEventListener('click', (e) => { if (!fsBox.classList.contains('ui')) { e.preventDefault(); e.stopImmediatePropagation(); showUI(); } }, true));
-      fsBox.append(fr, fsClose(), nx, pv);
+      const send = (m) => { try { fr.contentWindow.postMessage(Object.assign({ mtk2: 1 }, m), '*'); } catch (e) {} };
+      const sk = meta && meta.ser ? h('button', { class: 'fsk', onclick: () => { send({ seek: 85 }); sk.remove(); } }, 'تخطّي المقدمة ', icon('next')) : null;
+      if (sk) setTimeout(() => sk.remove(), 240000);
+      const sp = h('button', { class: 'fsc', onclick: guard(() => { rate = RATES[(RATES.indexOf(rate) + 1) % RATES.length]; sp.textContent = 'السرعة ' + rate + 'x'; send({ rate }); }) }, 'السرعة ' + rate + 'x');
+      const sl = h('button', { class: 'fsc', onclick: guard(() => { sleepIdx = (sleepIdx + 1) % SLEEPS.length; setSleep(); sl.textContent = sleepLbl(); }) }, sleepLbl());
+      fsBox.append(fr, fsClose(), nx, pv, sk, h('div', { class: 'fsbar' }, sp, sl));
       showUI();
     }
+    const RATES = [1, 1.25, 1.5, 0.75];
+    let rate = 1;
+    const SLEEPS = [0, 30, 60, 90];
+    let sleepIdx = 0, sleepT = 0;
+    const sleepLbl = () => (sleepIdx ? 'نوم بعد ' + SLEEPS[sleepIdx] + 'د' : 'مؤقّت النوم');
+    function setSleep() {
+      clearTimeout(sleepT);
+      if (sleepIdx) sleepT = setTimeout(() => { sleepIdx = 0; closeFS(); }, SLEEPS[sleepIdx] * 60000);
+    }
+    W.__mtkPrefs = () => JSON.stringify({ rate, sleep: sleepIdx ? SLEEPS[sleepIdx] : 0 });
     function closeFS() {
       hideUp();
+      clearTimeout(sleepT);
+      sleepIdx = 0;
       if (!fsOn) return;
       fsOn = false;
       fsNative = false;
@@ -617,7 +664,9 @@ function MTK() {
       sheet.textContent = '';
       sheet.append(h('div', { class: 'panel' },
         h('div', { class: 'phead' }, h('b', null, 'الأقسام'), h('button', { class: 'hbtn', onclick: closeSheet }, icon('close'))),
-        MENU.map(([g, items]) => h('div', { class: 'mgroup' }, h('h4', null, g),
+        h('div', { class: 'mgroup' }, h('h4', null, 'الملف: ' + prof().n), h('div', { class: 'chips' },
+          h('button', { class: 'chip', onclick: openProfiles }, 'تغيير الملف'), h('a', { class: 'chip', href: '/mtk-list', 'data-spa': '' }, 'قائمتي'))),
+        (kids() ? MENU.filter(([g]) => g === 'أنمي') : MENU).map(([g, items]) => h('div', { class: 'mgroup' }, h('h4', null, g),
           h('div', { class: 'chips' }, items.map(([l, u]) => h('a', { class: 'chip', href: u, 'data-spa': '' }, l))))),
         h('div', { class: 'mgroup' }, h('h4', null, 'أنواع الأفلام'), h('div', { class: 'chips' }, genreChips('m'))),
         h('div', { class: 'mgroup' }, h('h4', null, 'أنواع المسلسلات'), h('div', { class: 'chips' }, genreChips('s')))
@@ -650,6 +699,7 @@ function MTK() {
     W.addEventListener('popstate', () => go(location.href, false));
 
     go(location.href, false);
+    if (profs().length && !sessionStorage.getItem('mtk-picked')) setTimeout(openProfiles, 300);
 
     /* ---------- router ---------- */
     function fetchUrlFor(u) {
@@ -685,6 +735,14 @@ function MTK() {
       main.append(h('div', { class: 'loader' }, h('i'), h('i'), h('i')));
       let res;
       try {
+        if (p === '/mtk-list') {
+          main.textContent = '';
+          D.title = 'قائمتي | MTK MEDIA';
+          main.append(h('h2', { class: 'ptitle' }, 'قائمتي'));
+          const l = myList();
+          main.append(l.length ? h('div', { class: 'grid' }, l.map((c) => cardEl(c))) : h('div', { class: 'empty' }, 'قائمتك فاضية. اكبس «+ قائمتي» على أي فيلم أو مسلسل'));
+          return;
+        }
         if (p === '/mtk-genre') {
           await goGenre(target, token);
           const st = history.state;
@@ -812,6 +870,89 @@ function MTK() {
         }, () => slot.remove());
       });
     }
+    const bigOf = (r) => { const g2 = groups(r.doc, r.url); return (g2.reduce((a, b) => (b.items.length > a.items.length ? b : a), g2[0] || { items: [] })).items; };
+    function listEl() {
+      const l = myList();
+      return l.length ? rowEl({ title: 'قائمتي', more: '/mtk-list', items: l.slice(0, 20) }) : null;
+    }
+    function top10(slot, u, title) {
+      const tok = navToken;
+      load(ORIGIN + u).then((r) => {
+        if (tok !== navToken) return;
+        const items = bigOf(r).slice(0, 10);
+        if (items.length < 3) return slot.remove();
+        slot.replaceWith(h('section', { class: 'row top10' },
+          h('div', { class: 'rhead' }, h('h3', null, title), h('a', { href: u, 'data-spa': '' }, 'الكل')),
+          h('div', { class: 'scroller' }, items.map((c, i) => { const e = cardEl(c); e.classList.remove('wide'); e.prepend(h('span', { class: 'tnum' }, String(i + 1))); return e; }))));
+      }, () => slot.remove());
+    }
+    function newEps(after) {
+      const fol = hist().filter((x) => x.ser);
+      if (!fol.length) return;
+      const slot = h('div');
+      if (after && after.parentNode === main) after.after(slot); else main.prepend(slot);
+      const key = (t) => norm(String(t || '').replace(/مسلسل|انمي|أنمي|برنامج|الموسم\s*\S+|الحلقة\s*\S+|مترجم[ةه]?|مدبلج[ةه]?|\d+/g, ' ')).replace(/\s+/g, ' ').trim();
+      const num = (t) => +((String(t || '').match(/(?:الحلقة|ح)\s*(\d+)/) || [])[1] || 0);
+      const fk = fol.map((x) => ({ k: key(x.title), img: /^http/.test(x.ser) ? x.ser : '', n: num(x.ep) }));
+      const seenW = watched(), tok = navToken;
+      Promise.all(['/episodes', '/asian-episodes', '/anime-episodes'].map((u) => load(ORIGIN + u).then((r) => [].concat(...groups(r.doc, r.url).map((g) => g.items)), () => []))).then((arrs) => {
+        if (tok !== navToken) return;
+        const s2 = new Set();
+        const items = [].concat(...arrs).filter((c) => {
+          if (s2.has(c.href) || seenW.has(sidOf(c.href))) return false;
+          const k = key(c.title), cn = num(c.title);
+          const ok = fk.some((f) => ((f.img && f.img === c.img) || (f.k.length > 2 && k.length > 2 && (k.includes(f.k) || f.k.includes(k)))) && (!f.n || !cn || cn > f.n));
+          if (ok) s2.add(c.href);
+          return ok;
+        }).slice(0, 20).map((c) => Object.assign({}, c, { badge: 'حلقة جديدة' }));
+        if (items.length) slot.replaceWith(rowEl({ title: 'حلقات جديدة من مسلسلاتك', items })); else slot.remove();
+      });
+    }
+    function kidsHome() {
+      const cw = cwEl();
+      if (cw) main.append(cw);
+      const ml = listEl();
+      if (ml) main.append(ml);
+      const tok = navToken;
+      [['m', 'رسوم متحركة', 'أفلام كرتون'], ['s', 'رسوم متحركة', 'مسلسلات كرتون'], ['m', 'عائلي', 'أفلام عائلية'], ['x', '/anime-movies', 'أفلام أنمي'], ['m', 'مغامرة', 'مغامرات']].forEach(([t, n, title]) => {
+        const slot = h('div');
+        main.append(slot);
+        const urls = t === 'x' ? [ORIGIN + n] : genreUrls(t, n);
+        const more = t === 'x' ? n : '/mtk-genre?t=' + t + '&n=' + encodeURIComponent(n);
+        const tryU = (i) => {
+          if (tok !== navToken) return;
+          if (i >= urls.length) return slot.remove();
+          load(urls[i]).then((r) => {
+            if (tok !== navToken) return;
+            const items = bigOf(r);
+            if (items.length) slot.replaceWith(rowEl({ title, more, items: items.slice(0, 20) })); else tryU(i + 1);
+          }, () => tryU(i + 1));
+        };
+        tryU(0);
+      });
+    }
+    function openProfiles() {
+      sheet.textContent = '';
+      const all = [{ id: '', n: 'الرئيسي' }].concat(profs());
+      const pick = (id) => { localStorage.setItem('mtk-prof', id); sessionStorage.setItem('mtk-picked', '1'); closeSheet(); go('/mobile', true); };
+      const inp = h('input', { type: 'text', placeholder: 'اسم الملف...', maxlength: '20' });
+      const kid = h('input', { type: 'checkbox' });
+      const form = h('form', { class: 'pform', onsubmit: (e) => {
+        e.preventDefault();
+        const n = inp.value.trim();
+        if (!n) return;
+        const id = Date.now().toString(36);
+        localStorage.setItem(PROFS, JSON.stringify(profs().concat([{ id, n, k: kid.checked }])));
+        pick(id);
+      } }, inp, h('label', { class: 'pkid' }, kid, ' ملف أطفال'), h('button', { type: 'submit', class: 'btn' }, 'إضافة'));
+      sheet.append(h('div', { class: 'panel' },
+        h('div', { class: 'phead' }, h('b', null, 'مين عم يتفرّج؟'), h('button', { class: 'hbtn', onclick: () => { sessionStorage.setItem('mtk-picked', '1'); closeSheet(); } }, icon('close'))),
+        h('div', { class: 'profs' }, all.map((x) => h('button', { class: 'prof' + (x.id === pid() ? ' on' : ''), onclick: () => pick(x.id) },
+          h('span', { class: 'pav' + (x.k ? ' kid' : '') }, x.n.slice(0, 1)), h('small', null, x.n + (x.k ? ' (أطفال)' : ''))))),
+        pid() ? h('button', { class: 'chip', onclick: () => { localStorage.setItem(PROFS, JSON.stringify(profs().filter((x) => x.id !== pid()))); pick(''); } }, 'حذف هالملف') : null,
+        h('div', { class: 'mgroup' }, h('h4', null, 'ملف جديد'), form)));
+      sheet.classList.add('open');
+    }
     function render(doc, base, fs) {
       main.textContent = '';
       const hasPlayer = !!doc.querySelector('iframe[name="player_iframe"], .signleWatch');
@@ -830,11 +971,19 @@ function MTK() {
         return;
       }
       if (isHome) {
+        if (kids()) return kidsHome();
         const cw = cwEl();
         if (cw && !D.getElementById('mtk-cw')) main.append(cw);
+        const ml = listEl();
+        if (ml) main.append(ml);
         let first = null;
         gs.forEach((g) => { const r = rowEl(g); main.append(r); if (!first) first = r; });
-        forYou(first || D.getElementById('mtk-cw') || main.firstChild);
+        const t1 = h('div'), t2 = h('div');
+        if (first) first.after(t1, t2); else main.append(t1, t2);
+        top10(t1, '/movies_top_views', 'أعلى 10 أفلام');
+        top10(t2, '/series_top_views', 'أعلى 10 مسلسلات');
+        forYou(t2);
+        newEps(D.getElementById('mtk-cw'));
         return;
       }
       let biggest = gs.reduce((a, b) => (b.items.length > a.items.length && !b.slider ? b : a), gs.find((g) => !g.slider) || gs[0]);
@@ -936,6 +1085,11 @@ function MTK() {
           rating ? h('div', { class: 'srate' }, '★ ', h('b', null, rating), ' / 10') : null,
           h('div', { class: 'chips' }, info.slice(0, 6).map((i) => h('span', { class: 'chip ghost' }, i.replace(/^[^:]*:\s*/, ''))))));
       main.append(head);
+      const lc = { href: (seasons.find((c) => c.on) || {}).href || base, img: poster, title };
+      const lab = () => (inList(lc.href) ? '✓ بقائمتي' : '+ قائمتي');
+      const lb = h('button', { class: 'btn mylist', onclick: () => { lb.classList.toggle('on', toggleList(lc)); lb.textContent = lab(); } }, lab());
+      if (inList(lc.href)) lb.classList.add('on');
+      main.append(lb);
       if (desc) main.append(h('p', { class: 'desc' }, desc));
 
       if (eps.length) {
@@ -1042,6 +1196,25 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(-
 #mtk-fs iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 #mtk-fs .loader{height:100%;padding:0;align-items:center}
 #mtk-fs .fsx,#mtk-fs .fsn{opacity:0;transition:opacity .3s}
+#mtk-fs .fsbar{position:absolute;top:calc(10px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:3;display:flex;gap:8px;opacity:0;transition:opacity .3s}
+#mtk-fs.ui .fsbar{opacity:1}
+#mtk-fs .fsc{background:rgba(0,0,0,.6);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:18px;padding:7px 12px;font:inherit;font-size:12px;font-weight:700;white-space:nowrap}
+#mtk-fs .fsk{position:absolute;bottom:calc(80px + env(safe-area-inset-bottom));right:16px;z-index:3;display:flex;align-items:center;gap:4px;background:rgba(20,20,20,.85);color:#fff;border:2px solid #fff;border-radius:6px;padding:10px 16px;font:inherit;font-size:14px;font-weight:800}
+.top10 .card{position:relative;padding-right:30px}
+.top10 .tnum{position:absolute;right:-2px;bottom:28px;z-index:1;font-size:64px;font-weight:900;line-height:1;color:#0a0a0f;-webkit-text-stroke:2px #e5e5e5;pointer-events:none}
+.thumb .cwx{position:absolute;top:6px;left:6px;z-index:2;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(0,0,0,.65);color:#fff}
+.thumb .cwx svg{width:14px;height:14px}
+.mylist{margin-top:0}
+.mylist.on{border-color:var(--acc,#e50914);color:var(--acc,#e50914)}
+button.chip{font:inherit;font-size:13px;color:inherit}
+.profs{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;padding:16px 8px}
+.prof{background:none;border:0;color:inherit;font:inherit;display:flex;flex-direction:column;align-items:center;gap:6px}
+.pav{width:72px;height:72px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:900;color:#fff;background:linear-gradient(135deg,#e50914,#7a1b9e)}
+.pav.kid{background:linear-gradient(135deg,#f5b400,#22b14c)}
+.prof.on .pav,.prof:focus .pav{outline:3px solid #fff}
+.pform{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:0 4px}
+.pform input[type=text]{flex:1 1 160px;background:var(--card);border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:10px;font:inherit}
+.pform .btn{margin:0}
 #mtk-fs .fsn.fsp{top:calc(56px + env(safe-area-inset-top))}
 .epnav{display:flex;gap:10px;margin:0 16px 4px}.epnav .btn{flex:1;margin:0;justify-content:center}
 #mtk-fs.ui .fsx,#mtk-fs.ui .fsn,#mtk-fs .loader~.fsx{opacity:1}
