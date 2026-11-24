@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK WWE
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.0.0
+// @version      1.0.1
 // @description  MTK WWE - عروض المصارعة بدون إعلانات، مشاهدة الآن بأول سيرفر، ملفات وPIN، تابع المشاهدة، قائمتي
 // @match        *://shahed4u.here/*
 // @match        *://*.shahed4u.here/*
@@ -34,6 +34,7 @@ nav a[href*="/category/"]:not([href*="%D9%85%D8%B5%D8%A7%D8%B1%D8%B9%D8%A9"]):no
   const brand = (n) => {
     if (n.nodeType === 3) return brandTxt(n);
     if (n.nodeType !== 1 || /^(SCRIPT|STYLE)$/.test(n.nodeName)) return;
+    D.querySelectorAll('div.footer').forEach((c) => { if (!c.querySelector('*:not(br)') && c.textContent.trim() !== 'جميع الحقوق محفوظة © MTK WWE') c.textContent = 'جميع الحقوق محفوظة © MTK WWE'; });
     const w = D.createTreeWalker(n, NodeFilter.SHOW_TEXT); let t; while ((t = w.nextNode())) brandTxt(t);
     (n.matches && n.matches('img') ? [n] : n.querySelectorAll ? [...n.querySelectorAll('img')] : []).forEach((i) => { if (/logo/i.test((i.src || '') + (i.className || '') + (i.alt || ''))) { i.src = LOGO; i.alt = 'MTK WWE'; i.style.cssText = 'width:150px;max-width:38vw;height:auto;max-height:40px'; } });
     const lg = D.querySelector('.site-logo-title a');

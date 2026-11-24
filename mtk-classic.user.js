@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK CLASSIC
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.0.0
+// @version      1.0.1
 // @description  MTK CLASSIC - shoofmax بدون إعلانات، تشغيل مباشر، ملفات وPIN، تابع المشاهدة، الحلقة التالية تلقائياً
 // @match        *://shoofmax.com/*
 // @match        *://*.shoofmax.com/*
@@ -43,6 +43,9 @@
   const brand = (n) => {
     if (n.nodeType === 3) return brandTxt(n);
     if (n.nodeType !== 1 || /^(SCRIPT|STYLE)$/.test(n.nodeName)) return;
+    D.querySelectorAll('.footer .footer-title').forEach((t) => { if (/الشبكة المالكة/.test(t.textContent)) { const c = t.closest('[class*="col-"]'); if (c) c.style.display = 'none'; } });
+    D.querySelectorAll('.footer .copyright').forEach((c) => { if (c.textContent.trim() !== 'جميع الحقوق محفوظة © MTK CLASSIC') c.textContent = 'جميع الحقوق محفوظة © MTK CLASSIC'; });
+    D.querySelectorAll('.footer .footer-body-item').forEach((c) => { if (/شبكة شوف|Shoof/i.test(c.textContent)) c.textContent = 'MTK CLASSIC — مسلسلات وأفلام عربية بدون إعلانات.'; });
     const w = D.createTreeWalker(n, NodeFilter.SHOW_TEXT); let t; while ((t = w.nextNode())) brandTxt(t);
     (n.matches && n.matches('img') ? [n] : n.querySelectorAll ? [...n.querySelectorAll('img')] : []).forEach((i) => { if (/sm-deep|logo/i.test(i.src || '')) { i.src = LOGO; i.alt = 'MTK CLASSIC'; i.style.cssText = 'width:170px;max-width:40vw;height:auto;max-height:40px'; } });
   };
