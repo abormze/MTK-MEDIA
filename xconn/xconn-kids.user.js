@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         XCONN KIDS
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.1.1
+// @version      1.1.2
 // @description  XCONN KIDS - كرتون بدون إعلانات، تشغيل مباشر، ملفات شخصية، تابع المشاهدة
 // @author       XCONN
 // @match        *://cartoony.net/*
@@ -47,7 +47,7 @@ function MTKKIDS() {
   window.__mtkNet = (id, t) => { const f = netCb[id]; delete netCb[id]; if (f) f(t); };
   async function api(path, body) {
     if (window.MTKNet) {
-      const h = Object.assign({}, HDR, body ? { 'content-type': 'application/json' } : {});
+      const h = Object.assign({ referer: location.href, 'user-agent': navigator.userAgent }, HDR, body ? { 'content-type': 'application/json', origin: location.origin } : {});
       const t = await new Promise((res) => {
         const id = 'n' + (++netId);
         netCb[id] = res;
