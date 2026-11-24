@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK MEDIA
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.11.5
+// @version      1.11.6
 // @description  MTK MEDIA - واجهة موبايل بدون إعلانات لموقع فاصل، تشغيل مباشر من السيرفر الأول
 // @author       MTK
 // @match        *://fasel-hd.co/*
@@ -474,6 +474,10 @@ function MTK() {
     const sidOf = (u) => { try { const x = new URL(u, ORIGIN); return decodeURIComponent(x.pathname + x.search); } catch (e) { return u; } };
     let curSid = '';
     const PROFS = 'mtk-profs';
+    const PINS = 'mtk-pins';
+    const pins = () => { try { return JSON.parse(localStorage.getItem(PINS)) || {}; } catch (e) { return {}; } };
+    const pinH = (v) => { let x = 7; for (const c of v) x = (x * 31 + c.charCodeAt(0)) >>> 0; return 'h' + x.toString(36); };
+    const setPin = (id, v) => { const m = pins(); if (v) m[id] = pinH(v); else delete m[id]; localStorage.setItem(PINS, JSON.stringify(m)); };
     const profs = () => { try { return JSON.parse(localStorage.getItem(PROFS)) || []; } catch (e) { return []; } };
     const pid = () => localStorage.getItem('mtk-prof') || '';
     const prof = () => profs().find((x) => x.id === pid()) || { id: '', n: 'الرئيسي' };
@@ -713,7 +717,7 @@ function MTK() {
 
     go(location.href, false);
     paintProf();
-    if (!localStorage.getItem('mtk-picked')) openProfiles(true);
+    if (!localStorage.getItem('mtk-picked') || (pins()[pid()] && !sessionStorage.getItem('mtk-unl'))) openProfiles(true);
 
     /* ---------- router ---------- */
     function fetchUrlFor(u) {
@@ -992,11 +996,53 @@ function MTK() {
         tryU(0);
       });
     }
+    function pinPad(title, sub, done, back) {
+      sheet.textContent = '';
+      let v = '';
+      const dots = h('div', { class: 'pdots' });
+      const msg = h('div', { class: 'pmsg' }, sub || '');
+      const paint = () => { dots.textContent = ''; for (let i = 0; i < 4; i++) dots.append(h('i', { class: i < v.length ? 'on' : '' })); };
+      const press = (d) => {
+        if (d === 'del') v = v.slice(0, -1); else if (v.length < 4) v += d;
+        paint();
+        if (v.length === 4 && done(v) === false) {
+          v = '';
+          msg.textContent = 'رمز غلط، جرّب كمان مرة';
+          dots.classList.add('err');
+          setTimeout(() => { dots.classList.remove('err'); paint(); }, 450);
+        }
+      };
+      sheet._pin = press;
+      if (!sheet._pinL) {
+        sheet._pinL = 1;
+        D.addEventListener('keydown', (e) => {
+          if (!sheet.querySelector('.pkeys')) return;
+          const k = /^[0-9]$/.test(e.key) ? e.key : (e.key === 'Backspace' ? 'del' : '');
+          if (k) { e.preventDefault(); e.stopPropagation(); sheet._pin(k); }
+        }, true);
+      }
+      const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'back', '0', 'del'];
+      sheet.append(h('div', { class: 'panel pgate' },
+        h('div', { class: 'phead' }, h('b', null, title)), msg, dots,
+        h('div', { class: 'pkeys' }, keys.map((k) => h('button', { class: 'pkey' + (k === 'back' ? ' pk2' : ''), onclick: () => (k === 'back' ? back() : press(k)) }, k === 'back' ? 'رجوع' : k === 'del' ? '⌫' : k)))));
+      paint();
+      sheet.classList.add('open');
+      setTimeout(() => { try { sheet.querySelector('.pkey').focus({ preventScroll: true }); } catch (e) {} }, 50);
+    }
     function openProfiles(force) {
       sheet.textContent = '';
       if (force) sheet.dataset.lock = '1';
       const all = [{ id: '', n: 'الرئيسي' }].concat(profs());
       const pick = (id) => {
+        const lk = pins()[id];
+        if (lk && (force || id !== pid())) {
+          const x = all.find((a) => a.id === id) || { n: '' };
+          return pinPad('أدخل رمز PIN', x.n, (v) => (pinH(v) === lk ? (enter(id), true) : false), () => openProfiles(force));
+        }
+        enter(id);
+      };
+      const enter = (id) => {
+        sessionStorage.setItem('mtk-unl', '1');
         const same = force && id === pid();
         localStorage.setItem('mtk-prof', id);
         localStorage.setItem('mtk-picked', '1');
@@ -1007,19 +1053,27 @@ function MTK() {
       };
       const inp = h('input', { type: 'text', placeholder: 'اسم الملف...', maxlength: '20' });
       const kid = h('input', { type: 'checkbox' });
+      const npin = h('input', { type: 'password', inputmode: 'numeric', maxlength: '4', placeholder: 'PIN (اختياري)', class: 'npin' });
       const form = h('form', { class: 'pform', onsubmit: (e) => {
         e.preventDefault();
         const n = inp.value.trim();
+        const pv = npin.value.trim();
         if (!n) return;
+        if (pv && !/^\d{4}$/.test(pv)) { npin.value = ''; npin.placeholder = 'لازم 4 أرقام'; return; }
         const id = Date.now().toString(36);
         localStorage.setItem(PROFS, JSON.stringify(profs().concat([{ id, n, k: kid.checked }])));
-        pick(id);
-      } }, inp, h('label', { class: 'pkid' }, kid, ' ملف أطفال'), h('button', { type: 'submit', class: 'btn' }, 'إضافة'));
+        if (pv) setPin(id, pv);
+        enter(id);
+      } }, inp, npin, h('label', { class: 'pkid' }, kid, ' ملف أطفال'), h('button', { type: 'submit', class: 'btn' }, 'إضافة'));
       sheet.append(h('div', { class: 'panel' + (force ? ' pgate' : '') },
         h('div', { class: 'phead' }, h('b', null, 'مين عم يتفرّج؟'), force ? null : h('button', { class: 'hbtn', onclick: closeSheet }, icon('close'))),
         h('div', { class: 'profs' }, all.map((x) => h('button', { class: 'prof' + (x.id === pid() ? ' on' : ''), onclick: () => pick(x.id) },
-          h('span', { class: 'pav' + (x.k ? ' kid' : '') }, x.n.slice(0, 1)), h('small', null, x.n + (x.k ? ' (أطفال)' : ''))))),
-        pid() ? h('button', { class: 'chip', onclick: () => { localStorage.setItem(PROFS, JSON.stringify(profs().filter((x) => x.id !== pid()))); pick(''); } }, 'حذف هالملف') : null,
+          h('span', { class: 'pav' + (x.k ? ' kid' : '') }, x.n.slice(0, 1), pins()[x.id] ? h('i', { class: 'plock' }, '🔒') : null), h('small', null, x.n + (x.k ? ' (أطفال)' : ''))))),
+        force ? null : h('div', { class: 'pacts' },
+          pins()[pid()]
+            ? h('button', { class: 'chip', onclick: () => pinPad('أدخل الرمز الحالي', 'لتشيل القفل عن «' + prof().n + '»', (v) => (pinH(v) === pins()[pid()] ? (setPin(pid(), ''), openProfiles(), true) : false), () => openProfiles()) }, 'شيل رمز PIN')
+            : h('button', { class: 'chip', onclick: () => pinPad('رمز PIN جديد', 'اختار 4 أرقام لـ «' + prof().n + '»', (v) => { pinPad('أكّد الرمز', 'اكتبو كمان مرة', (v2) => (v2 === v ? (setPin(pid(), v), openProfiles(), true) : false), () => openProfiles()); return true; }, () => openProfiles()) }, 'قفل بـ PIN'),
+          pid() ? h('button', { class: 'chip', onclick: () => { setPin(pid(), ''); localStorage.setItem(PROFS, JSON.stringify(profs().filter((x) => x.id !== pid()))); enter(''); } }, 'حذف هالملف') : null),
         h('div', { class: 'mgroup' }, h('h4', null, 'ملف جديد'), form)));
       sheet.classList.add('open');
       setTimeout(() => { const b = sheet.querySelector('.prof.on') || sheet.querySelector('.prof'); try { b.focus({ preventScroll: true }); } catch (e) {} }, 50);
@@ -1299,6 +1353,21 @@ button.chip{font:inherit;font-size:13px;color:inherit}
 .pform{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:0 4px}
 .pform input[type=text]{flex:1 1 160px;background:var(--card);border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:10px;font:inherit}
 .pform .btn{margin:0}
+.pform .npin{flex:0 1 130px;background:var(--card);border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:10px;font:inherit}
+.pav{position:relative}
+.plock{position:absolute;bottom:-4px;left:-4px;font-size:16px;font-style:normal;background:#0a0a10;border-radius:50%;padding:2px;line-height:1}
+.pacts{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.pmsg{text-align:center;color:var(--mut,#aaa);margin:4px 0 14px;min-height:20px}
+.pdots{display:flex;gap:14px;justify-content:center;margin-bottom:22px}
+.pdots i{width:16px;height:16px;border-radius:50%;border:2px solid #fff;display:block}
+.pdots i.on{background:#fff}
+.pdots.err{animation:pshake .4s}
+.pdots.err i{border-color:#e50914}
+@keyframes pshake{25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+.pkeys{display:grid;grid-template-columns:repeat(3,72px);gap:12px;justify-content:center;direction:ltr}
+.pkey{height:60px;border-radius:14px;border:1px solid var(--line);background:var(--card);color:var(--txt);font:inherit;font-size:24px;font-weight:700}
+.pkey.pk2{font-size:15px}
+.pkey:focus{outline:3px solid #fff}
 #mtk-fs .fsn.fsp{top:calc(56px + env(safe-area-inset-top))}
 .epnav{display:flex;gap:10px;margin:0 16px 4px}.epnav .btn{flex:1;margin:0;justify-content:center}
 #mtk-fs.ui .fsx,#mtk-fs.ui .fsn,#mtk-fs .loader~.fsx{opacity:1}
