@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK MEDIA
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.11.6
+// @version      1.12.0
 // @description  MTK MEDIA - واجهة موبايل بدون إعلانات لموقع فاصل، تشغيل مباشر من السيرفر الأول
 // @author       MTK
 // @match        *://fasel-hd.co/*
@@ -717,7 +717,7 @@ function MTK() {
 
     go(location.href, false);
     paintProf();
-    if (!localStorage.getItem('mtk-picked') || (pins()[pid()] && !sessionStorage.getItem('mtk-unl'))) openProfiles(true);
+    gate(() => { if (!localStorage.getItem('mtk-picked') || (pins()[pid()] && !sessionStorage.getItem('mtk-unl'))) openProfiles(true); });
 
     /* ---------- router ---------- */
     function fetchUrlFor(u) {
@@ -864,6 +864,30 @@ function MTK() {
       return out.filter((g) => !seen.has(g.n) && seen.add(g.n)).slice(0, 4);
     }
 
+    /* ---------- app password (once per device) ---------- */
+    function gate(next) {
+      const GATE_H = 'f1626dc324001b104467125a902fcdb4e92c4757c56064507f1d926a39ba13a4';
+      if (localStorage.getItem('mtk-gate') === GATE_H.slice(0, 16)) return next();
+      sheet.dataset.lock = '1';
+      sheet.textContent = '';
+      const inp = h('input', { type: 'password', class: 'ginp', placeholder: 'كلمة السر', autocomplete: 'off', dir: 'ltr' });
+      const msg = h('div', { class: 'pmsg' });
+      const ok = async () => {
+        const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('mtk-gate:' + inp.value));
+        const hx = Array.from(new Uint8Array(b)).map((x) => x.toString(16).padStart(2, '0')).join('');
+        if (hx !== GATE_H) { msg.textContent = 'كلمة السر غلط'; inp.value = ''; return; }
+        localStorage.setItem('mtk-gate', GATE_H.slice(0, 16));
+        delete sheet.dataset.lock;
+        sheet.classList.remove('open');
+        sheet.textContent = '';
+        next();
+      };
+      sheet.append(h('div', { class: 'panel pgate' }, h('div', { class: 'phead' }, h('b', null, 'أدخل كلمة السر')), msg,
+        h('form', { class: 'gform', onsubmit: (e) => { e.preventDefault(); ok(); } }, inp, h('button', { class: 'btn big', type: 'submit' }, 'دخول'))));
+      sheet.classList.add('open');
+      setTimeout(() => { try { inp.focus(); } catch (e) {} }, 60);
+    }
+
     /* ---------- views ---------- */
     function cardEl(c, wide) {
       return h('a', { class: 'card' + (wide || c.ep ? ' wide' : ''), href: c.href, 'data-spa': '' },
@@ -873,6 +897,30 @@ function MTK() {
           c.rate ? h('span', { class: 'rate' }, '★ ' + c.rate.replace(/[^\d.]/g, '')) : null,
           h('span', { class: 'pl' }, icon('play'))),
         h('div', { class: 'ctitle' }, c.title));
+    }
+    function heroEl(c) {
+      return h('section', { class: 'hero' },
+        c.img ? h('img', { src: c.img, alt: '', referrerpolicy: 'no-referrer-when-downgrade' }) : null,
+        h('div', { class: 'hinfo' }, c.badge ? h('span', { class: 'hbadge' }, c.badge) : null, h('h2', null, c.title),
+          h('a', { class: 'btn hplay', href: c.href, 'data-spa': '' }, icon('play'), ' شاهد الآن')));
+    }
+    function heroes(items) {
+      const list = items.filter((c) => c.img).slice(0, 8);
+      if (!list.length) return null;
+      let i = 0, t = 0;
+      const slides = list.map(heroEl);
+      const dots = h('div', { class: 'hdots' }, list.map((_, j) => h('i', { onclick: () => step(j - i) })));
+      const paint = () => { slides.forEach((s, j) => s.classList.toggle('on', j === i)); Array.from(dots.children).forEach((d, j) => d.classList.toggle('on', j === i)); };
+      const auto = () => { clearInterval(t); t = setInterval(() => { if (!box.isConnected) return clearInterval(t); if (!(box.contains(D.activeElement) && D.activeElement.matches(':focus-visible'))) { i = (i + 1) % list.length; paint(); } }, 6000); };
+      const step = (d) => { i = (i + d + list.length) % list.length; paint(); auto(); };
+      const box = h('div', { class: 'hcar' }, slides,
+        list.length > 1 ? h('button', { class: 'harr hnext', 'aria-label': 'التالي', onclick: () => step(1) }, icon('prev')) : null,
+        list.length > 1 ? h('button', { class: 'harr hprev', 'aria-label': 'السابق', onclick: () => step(-1) }, icon('next')) : null, list.length > 1 ? dots : null);
+      let sx = 0;
+      box.addEventListener('touchstart', (e) => { sx = e.touches[0].clientX; }, { passive: true });
+      box.addEventListener('touchend', (e) => { const dx = e.changedTouches[0].clientX - sx; if (Math.abs(dx) > 45) step(dx > 0 ? -1 : 1); }, { passive: true });
+      paint(); auto();
+      return box;
     }
     function rowEl(g) {
       return h('section', { class: 'row' },
@@ -1102,7 +1150,10 @@ function MTK() {
         const ml = listEl();
         if (ml) main.append(ml);
         let first = null;
-        gs.forEach((g) => { const r = rowEl(g); main.append(r); if (!first) first = r; });
+        const fg = gs.find((g) => g.title === 'مميز' && g.items.some((c) => c.img));
+        const hc = fg && heroes(fg.items);
+        if (hc) main.append(hc);
+        gs.forEach((g) => { if (hc && g === fg) return; const r = rowEl(g); main.append(r); if (!first) first = r; });
         const t1 = h('div'), t2 = h('div');
         if (first) first.after(t1, t2); else main.append(t1, t2);
         top10(t1, '/movies_top_views', 'أعلى 10 أفلام');
@@ -1423,6 +1474,26 @@ body{max-width:none;padding-bottom:calc(64px + env(safe-area-inset-bottom))}
 .btn{max-width:520px}
 .player{max-width:calc(70vh * 16 / 9);margin:0 auto}
 }
+.hcar{position:relative}
+.hcar>.hero{display:none}
+.hcar>.hero.on{display:block;animation:hfade .6s ease}
+@keyframes hfade{from{opacity:.25}to{opacity:1}}
+.harr{position:absolute;top:42%;z-index:3;width:42px;height:42px;border-radius:50%;border:0;background:rgba(0,0,0,.45);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.harr .ic{width:24px;height:24px}
+.harr:focus{outline:3px solid var(--acc);background:rgba(0,0,0,.75)}
+.hnext{right:8px}.hprev{left:8px}
+.hdots{position:absolute;bottom:10px;left:0;right:0;display:flex;gap:6px;justify-content:center;z-index:3}
+.hdots i{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.45);cursor:pointer}
+.hdots i.on{background:var(--acc);width:22px;border-radius:4px}
+.gform{display:flex;flex-direction:column;gap:12px;margin-top:12px}
+.ginp{font-size:20px;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--txt);text-align:center}
+.hcar .hero{position:relative;height:52vw;max-height:540px;min-height:220px;overflow:hidden;background:#000}
+.hcar .hero img{width:100%;height:100%;object-fit:cover;display:block}
+.hcar .hinfo{position:absolute;left:0;right:0;bottom:0;padding:18px 16px 30px;background:linear-gradient(transparent,rgba(0,0,0,.92))}
+.hcar .hinfo h2{margin:0 0 10px;font-size:22px;line-height:1.3;text-shadow:0 2px 8px #000}
+.hcar .hbadge{display:inline-block;background:var(--acc);color:#fff;border-radius:6px;padding:2px 8px;font-size:12px;margin-bottom:6px}
+.hcar .hplay{display:inline-flex;align-items:center;gap:6px;background:var(--acc);color:#fff;border-radius:22px;padding:9px 18px;text-decoration:none;font-weight:700}
+.hcar .hplay .ic{width:18px;height:18px}
 `;
     }
   }
