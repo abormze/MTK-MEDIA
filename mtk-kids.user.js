@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK KIDS
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.0.0
+// @version      1.0.1
 // @description  MTK KIDS - كرتون بدون إعلانات، تشغيل مباشر، ملفات شخصية، تابع المشاهدة
 // @author       MTK
 // @match        *://cartoony.net/*
@@ -339,7 +339,7 @@ function MTKKIDS() {
     const pp = o.prog;
     return h('a', { class: 'card' + (o.wide ? ' wide' : ''), href: o.href || showHref(x), 'data-spa': '' },
       h('div', { class: 'thumb' },
-        (o.img || x.img) ? h('img', { src: o.img || x.img, loading: 'lazy', alt: '' }) : null,
+        (o.img || x.img) ? h('img', { src: o.img || x.img, 'data-fb': o.img && x.img && o.img !== x.img ? x.img : null, loading: 'lazy', alt: '' }) : null,
         o.badge ? h('span', { class: 'badge' }, o.badge) : (x.mv ? h('span', { class: 'badge mv' }, 'فيلم') : null),
         o.num ? h('span', { class: 'tnum' }, String(o.num)) : null,
         o.x ? h('span', { class: 'cwx', role: 'button', tabindex: '0', 'aria-label': 'شيل', onclick: (e) => { e.preventDefault(); e.stopPropagation(); o.x(); }, onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); o.x(); } } }, icon('close')) : null,
