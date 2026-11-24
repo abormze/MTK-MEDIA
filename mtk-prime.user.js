@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK PRIME
 // @namespace    mtk-media
-// @version      1.1.0
+// @version      1.2.0
 // @description  MTK MEDIA for vidsrcprime: no ads, direct fullscreen player, Arabic subtitles, TV remote support
 // @match        *://vidsrcprime.site/*
 // @match        *://*.vidsrcprime.site/*
@@ -95,6 +95,14 @@
     const unmute = () => { const v = D.querySelector('video'); if (v && v.muted) { v.muted = false; v.volume = 1; } };
     W.addEventListener('pointerdown', unmute, true); W.addEventListener('keydown', unmute, true);
     const t = setInterval(() => { const v = D.querySelector('video'); if (v && v.readyState >= 2) kick(v); if (tries >= 12) clearInterval(t); }, 1500);
+    W.addEventListener('message', (e) => {
+      const m = e.data, v = D.querySelector('video');
+      if (!m || m.mtk !== 'cmd' || !v) return;
+      if (m.rate) try { v.playbackRate = m.rate; } catch (x) {}
+      if (m.seek) try { v.currentTime += m.seek; } catch (x) {}
+      if (m.pause) { userPaused = true; v.pause(); }
+    });
+    D.addEventListener('ended', () => { try { parent.postMessage({ mtk: 'end' }, '*'); } catch (x) {} }, true);
     // TV remote
     W.addEventListener('keydown', (e) => {
       if (e.defaultPrevented) return;
@@ -185,10 +193,86 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,[t
     const src = (r) => r.t === 'movie'
       ? `https://cinesrc.st/embed/movie/${r.id}?autoplay=true&subtitlelang=${SUB}`
       : `https://cinesrc.st/embed/tv/${r.id}?s=${r.s}&e=${r.e}&autoplay=true&subtitlelang=${SUB}`;
-    // watch history / continue watching
-    const HK = 'mtk-hist';
-    const hist = () => { try { return JSON.parse(localStorage.getItem(HK)) || []; } catch (e) { return []; } };
-    const saveH = (h) => { try { localStorage.setItem(HK, JSON.stringify(h.slice(0, 30))); } catch (e) {} };
+    // ---- password gate + profiles (PIN)
+    const el = (t, a, ...k) => { const e = D.createElement(t); if (a) for (const x in a) { if (x.startsWith('on')) e.addEventListener(x.slice(2), a[x]); else e.setAttribute(x, a[x]); } k.flat().forEach((c) => c != null && e.append(c)); return e; };
+    const sha = async (s) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))).map((x) => x.toString(16).padStart(2, '0')).join('');
+    const jget = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch (e) { return d; } };
+    const profs = () => { const p = jget('mtk-profs', []); return p.length ? p : [{ id: 'p0', n: 'الرئيسي' }]; };
+    const pid = () => localStorage.getItem('mtk-prof') || 'p0';
+    const prof = () => profs().find((p) => p.id === pid()) || profs()[0];
+    const pins = () => jget('mtk-pins', {});
+    const HKf = () => (pid() === 'p0' ? 'mtk-hist' : 'mtk-hist:' + pid());
+    const COL = ['#ff2d55', '#ffb020', '#22d3a6', '#3b82f6', '#a855f7', '#f97316'];
+    const avatar = (p) => el('span', { class: 'mtk-av', style: 'background:' + COL[Math.max(0, profs().findIndex((x) => x.id === p.id)) % 6] }, p.n.charAt(0));
+    let ov = null, ovLock = false;
+    const ovOpen = (node, lock) => { if (!ov) { ov = el('div', { id: 'mtk-ov', dir: 'rtl' }); (D.body || D.documentElement).append(ov); } ovLock = !!lock; ov.textContent = ''; ov.append(node); ov.classList.add('on'); };
+    const ovClose = () => { if (ov) { ov.classList.remove('on'); ov.textContent = ''; } ovLock = false; };
+    function askPw(title, sub, check, done, back, lock) {
+      const inp = el('input', { type: 'password', class: 'mtk-in', autocomplete: 'off', dir: 'ltr' });
+      const msg = el('div', { class: 'mtk-msg' });
+      const f = el('form', { onsubmit: async (e) => { e.preventDefault(); if (await check(inp.value)) done(); else { msg.textContent = 'غلط، جرّب كمان مرة'; inp.value = ''; inp.focus(); } } },
+        inp, el('button', { class: 'mtk-b', type: 'submit' }, 'دخول'), back ? el('button', { class: 'mtk-b2', type: 'button', onclick: back }, 'رجوع') : null);
+      ovOpen(el('div', { class: 'mtk-box' }, el('h2', null, title), sub ? el('p', null, sub) : null, msg, f), lock);
+      setTimeout(() => { try { inp.focus(); } catch (e) {} }, 80);
+    }
+    function gate(next) {
+      const GATE_H = 'f1626dc324001b104467125a902fcdb4e92c4757c56064507f1d926a39ba13a4';
+      if (localStorage.getItem('mtk-gate') === GATE_H.slice(0, 16)) return next();
+      askPw('أدخل كلمة السر', 'MTK PRIME', async (v) => (await sha('mtk-gate:' + v)) === GATE_H, () => { localStorage.setItem('mtk-gate', GATE_H.slice(0, 16)); ovClose(); next(); }, null, true);
+    }
+    function enter(id) { localStorage.setItem('mtk-prof', id); localStorage.setItem('mtk-picked', '1'); sessionStorage.setItem('mtk-unl', id); ovClose(); chip(); try { cw(); } catch (e) {} }
+    const setPinOf = async (id, v) => { const m = pins(); if (v) m[id] = await sha('mtk-pin:' + v); else delete m[id]; localStorage.setItem('mtk-pins', JSON.stringify(m)); };
+    function profiles(force) {
+      const pn = pins(), cur = prof();
+      const grid = el('div', { class: 'mtk-pg' }, profs().map((p) => el('button', { class: 'mtk-pf', onclick: () => (pn[p.id]
+        ? askPw('أدخل رمز PIN', p.n, async (v) => (await sha('mtk-pin:' + v)) === pn[p.id], () => enter(p.id), () => profiles(force), force)
+        : enter(p.id)) }, avatar(p), el('b', null, p.n + (pn[p.id] ? ' 🔒' : '')))));
+      const nm = el('input', { class: 'mtk-in', placeholder: 'اسم الملف...', maxlength: '20' });
+      const np = el('input', { class: 'mtk-in', type: 'password', inputmode: 'numeric', maxlength: '4', placeholder: 'PIN (اختياري)', dir: 'ltr' });
+      const add = el('form', { class: 'mtk-add', onsubmit: async (e) => {
+        e.preventDefault(); const n = nm.value.trim(); if (!n) return;
+        const l = profs(), id = 'p' + Date.now().toString(36); l.push({ id, n }); localStorage.setItem('mtk-profs', JSON.stringify(l));
+        if (/^\d{4}$/.test(np.value)) await setPinOf(id, np.value);
+        profiles(force);
+      } }, el('h3', null, 'ملف جديد'), nm, np, el('button', { class: 'mtk-b', type: 'submit' }, 'إضافة'));
+      const lockBtn = force ? null : el('button', { class: 'mtk-b2', type: 'button', onclick: () => (pn[cur.id]
+        ? askPw('أدخل الرمز الحالي', cur.n, async (v) => (await sha('mtk-pin:' + v)) === pn[cur.id], async () => { await setPinOf(cur.id, ''); profiles(); }, () => profiles())
+        : askPw('رمز PIN جديد (4 أرقام)', cur.n, async (v) => { if (!/^\d{4}$/.test(v)) return false; await setPinOf(cur.id, v); return true; }, () => profiles(), () => profiles())) },
+      pn[cur.id] ? 'شيل قفل PIN عن «' + cur.n + '»' : 'قفل «' + cur.n + '» بـ PIN');
+      ovOpen(el('div', { class: 'mtk-box wide' }, el('h2', null, 'مين عم يتفرّج؟'), grid, add, lockBtn,
+        force ? null : el('button', { class: 'mtk-b2', type: 'button', onclick: ovClose }, 'إغلاق')), force);
+    }
+    function chip() {
+      if (!D.body) return;
+      let c = D.getElementById('mtk-pc');
+      if (!c) { c = el('button', { id: 'mtk-pc', 'aria-label': 'الملف', onclick: () => profiles() }); D.body.append(c); }
+      const p = prof();
+      if (c.dataset.p !== p.id + p.n) { c.dataset.p = p.id + p.n; c.textContent = ''; c.append(avatar(p), el('b', null, p.n)); }
+      if (!c.isConnected) D.body.append(c);
+    }
+    css(`#mtk-ov{position:fixed;inset:0;z-index:2147483647;background:#0b0b10;display:none;align-items:center;justify-content:center;overflow:auto;font:15px system-ui,sans-serif;color:#fff}
+#mtk-ov.on{display:flex}
+.mtk-box{width:min(92vw,420px);text-align:center;padding:24px 0}.mtk-box.wide{width:min(94vw,760px)}
+.mtk-box h2{font-size:28px;font-weight:900;margin:0 0 18px}.mtk-box h3{margin:18px 0 8px;color:#ffb020;font-size:16px}.mtk-box p{color:#aaa;margin:-8px 0 12px}
+.mtk-msg{color:#ff6b81;min-height:20px;margin-bottom:6px}
+.mtk-box form{display:flex;flex-direction:column;gap:10px}
+.mtk-in{font-size:18px;padding:12px;border-radius:10px;border:1px solid #333;background:#16161f;color:#fff;text-align:center}
+.mtk-b,.mtk-b2{font:700 16px system-ui,sans-serif;padding:12px;border-radius:10px;border:0;cursor:pointer}
+.mtk-b{background:#e50914;color:#fff}.mtk-b2{background:#22222c;color:#ddd;margin-top:10px;width:100%}
+.mtk-pg{display:flex;flex-wrap:wrap;gap:18px;justify-content:center}
+.mtk-pf{background:none;border:0;color:#ddd;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;padding:6px;border-radius:12px}
+.mtk-pf .mtk-av{width:96px;height:96px;font-size:44px;border-radius:12px}
+.mtk-pf:focus,.mtk-pf:hover{outline:3px solid #fff;color:#fff}
+.mtk-av{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;color:#fff;font-weight:900}
+#mtk-pc{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:60;display:flex;align-items:center;gap:6px;background:rgba(20,20,28,.85);color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:20px;padding:4px 12px 4px 5px;font:700 13px system-ui,sans-serif;cursor:pointer}
+html.mtk-on #mtk-pc{display:none}`);
+    const bootProf = () => { chip(); gate(() => { if (!localStorage.getItem('mtk-picked') || (pins()[pid()] && sessionStorage.getItem('mtk-unl') !== pid())) profiles(true); }); };
+    if (D.readyState === 'loading') D.addEventListener('DOMContentLoaded', bootProf); else bootProf();
+    setInterval(chip, 2000);
+
+    // watch history / continue watching (per profile)
+    const hist = () => { try { return JSON.parse(localStorage.getItem(HKf())) || []; } catch (e) { return []; } };
+    const saveH = (h) => { try { localStorage.setItem(HKf(), JSON.stringify(h.slice(0, 30))); } catch (e) {} };
     const slugT = (sl) => sl.replace(/^\d+-?/, '').split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     let meta = {}, curSid = null;
     const grab = (el) => {
@@ -276,6 +360,57 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,[t
     };
     W.__mtkBack = () => { if (!D.getElementById('mtk-pl')) return false; close(); return true; };
 
+    // ---- player extras: speed, sleep, skip intro, prev/next, autoplay next episode
+    const SPEEDS = [1, 1.25, 1.5, 0.75], SLEEPS = [0, 30, 60, 90];
+    let spI = 0, slI = 0, slT = 0, upT = 0, upOff = false, upKey = '';
+    const tell = (m) => { const f = D.querySelector('#mtk-pl iframe'); try { f && f.contentWindow.postMessage(Object.assign({ mtk: 'cmd' }, m), '*'); } catch (e) {} };
+    const goEp = (d) => { const c = route(); if (!c || c.t !== 'tv') return; const e = c.e + d; if (e < 1) return; upOff = false; history.replaceState({}, '', `/watch/tv/${c.slug}/${c.s}/${e}`); };
+    const upHide = () => { clearInterval(upT); upT = 0; const u = D.getElementById('mtk-up'); if (u) u.remove(); };
+    function upShow() {
+      const pl = D.getElementById('mtk-pl'), c = route();
+      if (!pl || !c || c.t !== 'tv' || upOff || D.getElementById('mtk-up')) return;
+      let n = 10;
+      const lab = el('b', null, 'الحلقة التالية بعد ' + n + ' ث');
+      const go = el('button', { class: 'mtk-upgo', onclick: () => { upHide(); goEp(1); } }, '▶ شغّل الآن');
+      const no = el('button', { class: 'mtk-upno', onclick: () => { upOff = true; upHide(); } }, 'إلغاء');
+      pl.append(el('div', { id: 'mtk-up', dir: 'rtl' }, el('div', null, 'م' + c.s + ' • ح' + (c.e + 1)), lab, el('div', { class: 'mtk-upb' }, go, no)));
+      setTimeout(() => { try { go.focus(); } catch (e) {} }, 50);
+      upT = setInterval(() => { n--; lab.textContent = 'الحلقة التالية بعد ' + n + ' ث'; if (n <= 0) { upHide(); goEp(1); } }, 1000);
+    }
+    W.addEventListener('message', (e) => {
+      const m = e.data; if (!m || !D.getElementById('mtk-pl')) return;
+      if (m.mtk === 'end') upShow();
+      else if (m.mtk === 'pos' && m.d > 300 && m.d - m.p < 35) upShow();
+      else if (m.mtk === 'pos') { const sk = D.getElementById('mtk-sk'); if (sk && m.p > 240) sk.remove(); }
+    });
+    function ctl(pl, r) {
+      const key = r.t + r.id + ':' + r.s + ':' + r.e;
+      if (upKey !== key) { upKey = key; upOff = false; upHide(); }
+      let bar = D.getElementById('mtk-bar');
+      if (bar && bar.dataset.k === key) return;
+      if (bar) bar.remove();
+      const sp = el('button', { onclick: () => { spI = (spI + 1) % SPEEDS.length; sp.textContent = 'السرعة ' + SPEEDS[spI] + 'x'; tell({ rate: SPEEDS[spI] }); } }, 'السرعة ' + SPEEDS[spI] + 'x');
+      const sl = el('button', { onclick: () => {
+        slI = (slI + 1) % SLEEPS.length; clearTimeout(slT);
+        sl.textContent = SLEEPS[slI] ? 'مؤقّت النوم ' + SLEEPS[slI] + ' د' : 'مؤقّت النوم';
+        if (SLEEPS[slI]) slT = setTimeout(() => { tell({ pause: 1 }); slI = 0; const b = D.querySelector('#mtk-bar .mtk-sl'); if (b) b.textContent = 'مؤقّت النوم'; }, SLEEPS[slI] * 60000);
+      }, class: 'mtk-sl' }, SLEEPS[slI] ? 'مؤقّت النوم ' + SLEEPS[slI] + ' د' : 'مؤقّت النوم');
+      bar = el('div', { id: 'mtk-bar' }, r.t === 'tv' && r.e > 1 ? el('button', { onclick: () => goEp(-1) }, '⏮ الحلقة السابقة') : null, sp, sl,
+        r.t === 'tv' ? el('button', { id: 'mtk-sk', onclick: (e) => { tell({ seek: 85 }); e.currentTarget.remove(); } }, 'تخطّي المقدمة ⏩') : null);
+      bar.dataset.k = key;
+      pl.append(bar);
+      if (spI) setTimeout(() => tell({ rate: SPEEDS[spI] }), 4000);
+    }
+    css(`#mtk-bar{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:2;display:flex;gap:8px;transition:opacity .4s}
+#mtk-pl #mtk-bar button{position:static}
+#mtk-pl.idle #mtk-bar{opacity:0;pointer-events:none}
+#mtk-pl #mtk-bar #mtk-sk{background:#fff;color:#000}
+#mtk-up{position:absolute;bottom:70px;right:24px;z-index:3;background:rgba(10,10,16,.92);border:1px solid rgba(255,255,255,.2);border-radius:14px;padding:14px 18px;color:#fff;font:15px system-ui,sans-serif;display:flex;flex-direction:column;gap:8px;min-width:240px}
+#mtk-up b{font-size:18px}.mtk-upb{display:flex;gap:8px}
+#mtk-pl #mtk-up button{position:static;opacity:1!important;pointer-events:auto!important}
+#mtk-pl #mtk-up .mtk-upgo{background:#e50914;border-color:#e50914}
+@media (max-width:700px){#mtk-bar{top:auto;bottom:14px;flex-wrap:wrap;justify-content:center;width:94%}#mtk-bar button{font-size:13px!important;padding:6px 10px!important}}`);
+
     function sync() {
       const r = route();
       let pl = D.getElementById('mtk-pl');
@@ -315,6 +450,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,[t
         pl.insertBefore(f, pl.firstChild);
         f.addEventListener('load', () => { try { f.focus(); f.contentWindow.focus(); } catch (e) {} });
       }
+      ctl(pl, r);
       goFull(); wake();
       setTimeout(() => { try { f.focus(); } catch (e) {} }, 300);
     }
@@ -322,13 +458,15 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,[t
 
     // TV remote: spatial navigation
     const FOC = 'a[href],button,input,select,[tabindex]:not([tabindex="-1"])';
+    const scopeOf = () => (ov && ov.classList.contains('on') ? ov : D.getElementById('mtk-up') || D);
     W.addEventListener('keydown', (e) => {
+      if (ov && ov.classList.contains('on') && (e.key === 'Escape' || e.key === 'GoBack' || e.key === 'BrowserBack')) { if (!ovLock) ovClose(); e.preventDefault(); return; }
       if (D.getElementById('mtk-pl')) { if (e.key === 'Escape' || e.key === 'GoBack' || e.key === 'BrowserBack') { close(); e.preventDefault(); } return; }
       const dir = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }[e.key];
       if (!dir || e.defaultPrevented) return;
       const a = D.activeElement;
       if (a && a.nodeName === 'INPUT' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
-      const vis = [...D.querySelectorAll(FOC)].filter((el) => { const b = el.getBoundingClientRect(); return b.width > 4 && b.height > 4 && !el.disabled && getComputedStyle(el).visibility !== 'hidden'; });
+      const vis = [...scopeOf().querySelectorAll(FOC)].filter((el) => { const b = el.getBoundingClientRect(); return b.width > 4 && b.height > 4 && !el.disabled && getComputedStyle(el).visibility !== 'hidden'; });
       if (!vis.length) return;
       if (!a || a === D.body || !vis.includes(a)) { vis[0].focus(); e.preventDefault(); return; }
       const ab = a.getBoundingClientRect(), ax = ab.left + ab.width / 2, ay = ab.top + ab.height / 2;
