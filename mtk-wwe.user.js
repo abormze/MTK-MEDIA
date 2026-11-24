@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK WWE
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.0.5
+// @version      1.0.6
 // @description  MTK WWE - عروض المصارعة بدون إعلانات، مشاهدة الآن بأول سيرفر، ملفات وPIN، تابع المشاهدة، قائمتي
 // @match        *://shahed4u.here/*
 // @match        *://*.shahed4u.here/*
@@ -13,6 +13,26 @@
 (function MTKWWE() {
   'use strict';
   const W = window, D = document;
+  if (W.top !== W.self && !/shahed4u|google|doubleclick/i.test(location.hostname)) {
+    let n = 0, muted = false, tried = false;
+    const t = setInterval(() => {
+      if (++n > 80) return clearInterval(t);
+      try {
+        const j = W.jwplayer && W.jwplayer();
+        if (j && j.getState) {
+          const st = j.getState();
+          if (st === 'playing') { if (!muted) clearInterval(t); else if (!tried) { tried = true; j.setMute(false); muted = false; setTimeout(() => { if (j.getState() !== 'playing') { j.setMute(true); muted = true; j.play(); } else clearInterval(t); }, 700); } return; }
+          if (st === 'buffering') return;
+          if (n > 8 && !muted) { j.setMute(true); muted = true; }
+          j.play();
+          return;
+        }
+        const v = D.querySelector('video');
+        if (v && v.paused) v.play().catch(() => { v.muted = true; v.play().catch(() => {}); });
+      } catch (e) {}
+    }, 500);
+    return;
+  }
   if (!/shahed4u/i.test(location.hostname) || W.top !== W.self || W.__mtkOn) return;
   W.__mtkOn = true;
   const CAT = '/category/%D8%B9%D8%B1%D9%88%D8%B6-%D9%85%D8%B5%D8%A7%D8%B1%D8%B9%D8%A9';
@@ -96,6 +116,18 @@ nav a[href*="/category/"]:not([href*="%D9%85%D8%B5%D8%A7%D8%B1%D8%B9%D8%A9"]):no
     ovOpen(el('div', { class: 'mtk-box wide' }, el('h2', null, 'مين عم يتفرّج؟'), grid, add, lockBtn,
       force ? null : el('button', { class: 'mtk-b2', type: 'button', onclick: ovClose }, 'إغلاق')), force);
   }
+  function filters() {
+    let sh = D.getElementById('mtk-fs');
+    if (!sh) {
+      const box = el('div', { class: 'mtk-fbox', dir: 'rtl' }, el('h3', null, 'فلترة العروض'));
+      D.querySelectorAll('select[onchange*="\'year\'"],select[onchange*="\'quality\'"]').forEach((x) => box.append(x));
+      box.append(el('button', { class: 'mtk-fclose', onclick: () => sh.classList.remove('open') }, 'تمّ'));
+      sh = el('div', { id: 'mtk-fs', onclick: (e) => { if (e.target === sh) sh.classList.remove('open'); } }, box);
+      D.body.append(sh);
+    }
+    sh.classList.add('open');
+    const f = sh.querySelector('select'); if (f) f.focus();
+  }
   function chip() {
     if (!D.body) return;
     let c = D.getElementById('mtk-pc');
@@ -110,6 +142,11 @@ nav a[href*="/category/"]:not([href*="%D9%85%D8%B5%D8%A7%D8%B1%D8%B9%D8%A9"]):no
       D.body.append(nav);
     }
     if (!nav.isConnected) D.body.append(nav);
+    if (!D.getElementById('mtk-fb') && D.querySelector('select[onchange*="\'year\'"]')) {
+      const b = el('button', { id: 'mtk-fb', class: 'mtk-ni', 'aria-label': 'فلترة', onclick: () => filters() });
+      b.innerHTML = '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M3 5h18v2l-7 7v6l-4-2v-4L3 7z"/></svg><small>فلترة</small>';
+      nav.insertBefore(b, nav.children[2] || null);
+    }
     if (!c) { c = el('button', { id: 'mtk-pc', class: 'mtk-ni', 'aria-label': 'الملف', onclick: () => profiles() }); nav.append(c); }
     const p = prof();
     if (c.dataset.p !== p.id + p.n) { c.dataset.p = p.id + p.n; c.textContent = ''; c.append(avatar(p), el('b', null, p.n)); }
@@ -139,7 +176,17 @@ body{padding-bottom:72px!important}
 #mtk-nav #mtk-pc{position:static!important;transform:none!important;border:0;background:none;padding:6px 0;gap:3px;font:600 11px system-ui,sans-serif;color:#bbb}
 #mtk-nav #mtk-pc .mtk-av{width:24px;height:24px;font-size:13px}
 #mtk-nav #mtk-pc b{font-weight:600;max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-html.mtk-on #mtk-nav,html.mtk-full #mtk-nav{display:none!important}`);
+html.mtk-on #mtk-nav,html.mtk-full #mtk-nav{display:none!important}
+#filtter,section[aria-labelledby="category-seo-intro-title"]{display:none!important}
+#mtk-hero{height:min(70vh,620px)!important;margin:0 0 14px!important;width:100%}
+#mtk-fs{position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.6);display:none;align-items:flex-end}
+#mtk-fs.open{display:flex}
+.mtk-fbox{width:100%;background:#16161e;border-radius:20px 20px 0 0;padding:18px 18px calc(84px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:14px}
+.mtk-fbox h3{color:#fff;font:800 20px system-ui,sans-serif;margin:0 0 4px;text-align:center}
+.mtk-fbox select{width:100%;height:58px;font-size:19px!important;font-weight:700;border-radius:14px!important;background-color:#24242e!important;color:#fff!important;border:1px solid rgba(255,255,255,.2)!important;padding:0 16px!important}
+.mtk-fbox select:focus{box-shadow:0 0 0 3px #e11d2e!important;outline:none}
+.mtk-fclose{height:54px;border:0;border-radius:14px;background:#e11d2e;color:#fff;font:800 18px system-ui,sans-serif}
+@media(max-width:768px){.container{max-width:100%!important;padding-left:8px!important;padding-right:8px!important}.mtk-hi h1{font-size:26px}}`);
   const bootProf = () => { chip(); gate(() => { if (!localStorage.getItem('mtk-picked') || (pins()[pid()] && sessionStorage.getItem('mtk-unl') !== pid())) profiles(true); }); };
   if (D.readyState === 'loading') D.addEventListener('DOMContentLoaded', bootProf); else bootProf();
   setInterval(chip, 2000);
@@ -226,7 +273,8 @@ html.mtk-full:hover .mtk-plbar,.mtk-plbar:focus-within,.mtk-plbar:hover{opacity:
     const cards = catList();
     if (cards.length && !location.search.includes('page=') ) localStorage.setItem('mtk-wwe-seq', JSON.stringify(cards));
     D.querySelectorAll('a.show-card').forEach((a) => { if (!a.dataset.mtk) { a.dataset.mtk = 1; const id = slug(a.href); a.href = watchUrl(id); a.addEventListener('click', () => record({ id, title: (a.querySelector('.title') || a).textContent.trim(), img: (a.querySelector('img') || {}).src || '' }), true); } });
-    const anchor = grid.closest('.container') || grid;
+    const inner = grid.closest('.container') || grid;
+    const anchor = (inner.parentElement && inner.parentElement.closest('.container')) || inner;
     if (!D.getElementById('mtk-hero') && cards.length && !location.search.includes('page=')) anchor.before(hero(cards.slice(0, 6)));
     if (force) D.querySelectorAll('#mtk-cw,#mtk-ml').forEach((n) => n.remove());
     if (!D.getElementById('mtk-cw')) { const h = hist(); if (h.length) anchor.before(row('mtk-cw', 'تابع المشاهدة', h.slice(0, 20), (x) => saveH(hist().filter((y) => y.id !== x.id)))); }
