@@ -205,20 +205,18 @@ public class MainActivity extends Activity {
         docStart = WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT);
         if (docStart) WebViewCompat.addDocumentStartJavaScript(web, script, Collections.singleton("*"));
 
+        android.webkit.ServiceWorkerController.getInstance().setServiceWorkerClient(new android.webkit.ServiceWorkerClient() {
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebResourceRequest r) {
+                return route(r.getUrl(), r.getMethod(), r.getRequestHeaders(), false);
+            }
+        });
+        web.addJavascriptInterface(new Net(), "MTKNet");
+
         web.setWebViewClient(new WebViewClient() {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView v, WebResourceRequest r) {
-                Uri u = r.getUrl();
-                if (isAd(u.getHost())) {
-                    return new WebResourceResponse("text/plain", "utf-8", new ByteArrayInputStream(new byte[0]));
-                }
-                String path = u.getPath();
-                if (tv && System.currentTimeMillis() > nativeOffUntil && "GET".equals(r.getMethod()) && path != null && path.toLowerCase().endsWith(".m3u8")
-                        && native_(u.toString(), r.getRequestHeaders())) {
-                    return new WebResourceResponse("text/plain", "utf-8", 204, "No Content", new HashMap<>(), new ByteArrayInputStream(new byte[0]));
-                }
-                if ("GET".equals(r.getMethod()) && Doh.wanted(u.getHost())) return Doh.fetch(u.toString(), r.getRequestHeaders(), r.isForMainFrame());
-                return null;
+                return route(r.getUrl(), r.getMethod(), r.getRequestHeaders(), r.isForMainFrame());
             }
 
             @Override
@@ -518,5 +516,33 @@ public class MainActivity extends Activity {
             web.destroy();
         }
         super.onDestroy();
+    }
+
+    private WebResourceResponse route(Uri u, String method, java.util.Map<String, String> headers, boolean main) {
+        String host = u.getHost();
+        if (isAd(host)) {
+            return new WebResourceResponse("text/plain", "utf-8", new ByteArrayInputStream(new byte[0]));
+        }
+        String path = u.getPath();
+        if (host != null && Doh.wanted(host) && path != null && path.matches("(?i)/(sw|registerSW|service-worker)\\.js")) {
+            return new WebResourceResponse("text/javascript", "utf-8", 404, "Not Found", new HashMap<>(), new ByteArrayInputStream(new byte[0]));
+        }
+        if (tv && System.currentTimeMillis() > nativeOffUntil && "GET".equals(method) && path != null && path.toLowerCase().endsWith(".m3u8")
+                && native_(u.toString(), headers)) {
+            return new WebResourceResponse("text/plain", "utf-8", 204, "No Content", new HashMap<>(), new ByteArrayInputStream(new byte[0]));
+        }
+        if ("GET".equals(method) && Doh.wanted(host)) return Doh.fetch(u.toString(), headers, main);
+        return null;
+    }
+
+    final class Net {
+        @android.webkit.JavascriptInterface
+        public void req(String id, String url, String body, String headers) {
+            new Thread(() -> {
+                String t = Doh.send(url, body, headers);
+                String js = "window.__mtkNet&&window.__mtkNet(" + org.json.JSONObject.quote(id) + "," + org.json.JSONObject.quote(t) + ")";
+                web.post(() -> web.evaluateJavascript(js, null));
+            }).start();
+        }
     }
 }

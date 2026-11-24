@@ -71,7 +71,7 @@ final class Doh {
     }
 
     private static boolean onCf(String host) {
-        return host.endsWith("cartoony.net") || host.endsWith("spacetoongo.com") || host.endsWith("carateen.tv");
+        return host.endsWith("cartoony.net") || host.endsWith("carateen.tv");
     }
 
     private static List<InetAddress> ask(String r, String host) {
@@ -151,8 +151,30 @@ final class Doh {
             return new WebResourceResponse(mime, cs, code, msg, hs, res.body().byteStream());
         } catch (Exception e) {
             if (!main) return null;
-            String html = "<html><body style='background:#111;color:#fff;font:20px sans-serif;padding:30px' dir='rtl'><h2>ما قدرنا نوصل للموقع</h2><p dir='ltr' style='color:#f88'>" + android.text.TextUtils.htmlEncode(String.valueOf(e)) + "</p><p dir='ltr' style='color:#aaa'>DNS: " + android.text.TextUtils.htmlEncode(lastError) + "</p><p>MTK KIDS " + "1.3.1" + "</p></body></html>";
+            String html = "<html><body style='background:#111;color:#fff;font:20px sans-serif;padding:30px' dir='rtl'><h2>ما قدرنا نوصل للموقع</h2><p dir='ltr' style='color:#f88'>" + android.text.TextUtils.htmlEncode(String.valueOf(e)) + "</p><p dir='ltr' style='color:#aaa'>DNS: " + android.text.TextUtils.htmlEncode(lastError) + "</p><p>MTK KIDS " + "1.3.2" + "</p></body></html>";
             return new WebResourceResponse("text/html", "utf-8", new java.io.ByteArrayInputStream(html.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        }
+    }
+
+    static String send(String url, String body, String headers) {
+        try {
+            Request.Builder b = new Request.Builder().url(url);
+            if (body != null && !body.isEmpty()) b.post(okhttp3.RequestBody.create(body, okhttp3.MediaType.parse("application/json")));
+            if (headers != null && !headers.isEmpty()) {
+                JSONObject h = new JSONObject(headers);
+                java.util.Iterator<String> it = h.keys();
+                while (it.hasNext()) { String k = it.next(); b.header(k, h.optString(k)); }
+            }
+            CookieManager cm = CookieManager.getInstance();
+            String ck = cm.getCookie(url);
+            if (ck != null && !ck.isEmpty()) b.header("Cookie", ck);
+            try (Response res = client.newCall(b.build()).execute()) {
+                for (String sc : res.headers("Set-Cookie")) cm.setCookie(url, sc);
+                return res.body() == null ? "" : res.body().string();
+            }
+        } catch (Exception e) {
+            lastError = String.valueOf(e);
+            return "";
         }
     }
 }

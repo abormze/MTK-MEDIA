@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK KIDS
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.1.0
+// @version      1.1.1
 // @description  MTK KIDS - كرتون بدون إعلانات، تشغيل مباشر، ملفات شخصية، تابع المشاهدة
 // @author       MTK
 // @match        *://cartoony.net/*
@@ -41,7 +41,20 @@ function MTKKIDS() {
     const pt = await crypto.subtle.decrypt({ name: 'AES-CBC', iv: hex(j.iv) }, ck, hex(j.encryptedData));
     return JSON.parse(new TextDecoder().decode(pt));
   }
+  try { navigator.serviceWorker && navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((x) => x.unregister())); } catch (e) {}
+  let netId = 0;
+  const netCb = {};
+  window.__mtkNet = (id, t) => { const f = netCb[id]; delete netCb[id]; if (f) f(t); };
   async function api(path, body) {
+    if (window.MTKNet) {
+      const h = Object.assign({}, HDR, body ? { 'content-type': 'application/json' } : {});
+      const t = await new Promise((res) => {
+        const id = 'n' + (++netId);
+        netCb[id] = res;
+        window.MTKNet.req(id, new URL(path, location.href).href, body ? JSON.stringify(body) : '', JSON.stringify(h));
+      });
+      if (t) { try { const j = JSON.parse(t); return j && j.encryptedData ? dec(j) : j; } catch (e) {} }
+    }
     const r = await fetch(path, { method: body ? 'POST' : 'GET', credentials: 'include', headers: Object.assign({}, HDR, body ? { 'content-type': 'application/json' } : {}), body: body ? JSON.stringify(body) : undefined });
     const t = await r.text();
     let j;
