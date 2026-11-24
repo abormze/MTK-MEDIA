@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK WWE
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.0.3
+// @version      1.0.4
 // @description  MTK WWE - عروض المصارعة بدون إعلانات، مشاهدة الآن بأول سيرفر، ملفات وPIN، تابع المشاهدة، قائمتي
 // @match        *://shahed4u.here/*
 // @match        *://*.shahed4u.here/*
@@ -23,7 +23,8 @@
   const kill = (n) => { try { if (n.nodeName === 'SCRIPT') { n.type = 'javascript/blocked'; n.removeAttribute('src'); } n.remove(); } catch (e) {} };
   const bad = (n) => n.nodeType === 1 && ((/^(SCRIPT|IFRAME)$/.test(n.nodeName) && AD.test(n.src || '')) || n.nodeName === 'INS' || (n.classList && n.classList.contains('adsbygoogle')));
   const noGenre = () => D.querySelectorAll('select[onchange*="\'genre\'"]').forEach((x) => { if (x.parentElement) x.parentElement.style.display = 'none'; });
-  D.addEventListener('DOMContentLoaded', noGenre);
+  const years = () => D.querySelectorAll('select[onchange*="\'year\'"] option').forEach((o) => { const y = +o.value; if (o.value && !(y >= 2010 && y <= 2027)) o.remove(); });
+  D.addEventListener('DOMContentLoaded', () => { noGenre(); years(); });
   const unblock = () => { if (D.body && D.body.style.overflow === 'hidden' && !D.querySelector('.mtk-gate,#mtk-pg,#mtk-prof')) D.body.style.overflow = ''; };
   new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) { if (n.nodeType === 1 && n.classList && n.classList.contains('ignielAdBlock')) { n.remove(); unblock(); continue; } if (bad(n)) kill(n); else if (n.querySelectorAll) n.querySelectorAll('script,iframe,ins').forEach((x) => { if (bad(x)) kill(x); }); } }).observe(D, { childList: true, subtree: true });
   const css = (txt) => { const add = () => { const s = D.createElement('style'); s.textContent = txt; (D.head || D.documentElement).appendChild(s); }; if (D.documentElement) add(); else setTimeout(() => css(txt), 20); };
