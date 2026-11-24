@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK WWE
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.0.4
+// @version      1.0.5
 // @description  MTK WWE - عروض المصارعة بدون إعلانات، مشاهدة الآن بأول سيرفر، ملفات وPIN، تابع المشاهدة، قائمتي
 // @match        *://shahed4u.here/*
 // @match        *://*.shahed4u.here/*
@@ -28,7 +28,7 @@
   const unblock = () => { if (D.body && D.body.style.overflow === 'hidden' && !D.querySelector('.mtk-gate,#mtk-pg,#mtk-prof')) D.body.style.overflow = ''; };
   new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) { if (n.nodeType === 1 && n.classList && n.classList.contains('ignielAdBlock')) { n.remove(); unblock(); continue; } if (bad(n)) kill(n); else if (n.querySelectorAll) n.querySelectorAll('script,iframe,ins').forEach((x) => { if (bad(x)) kill(x); }); } }).observe(D, { childList: true, subtree: true });
   const css = (txt) => { const add = () => { const s = D.createElement('style'); s.textContent = txt; (D.head || D.documentElement).appendChild(s); }; if (D.documentElement) add(); else setTimeout(() => css(txt), 20); };
-  css(`#mtk-pc{left:16px!important;transform:none!important;top:12px!important}div:has(> select[onchange*="'genre'"]),.ignielAdBlock,ins,.adsbygoogle,[id^="google_ads"],iframe[src*="doubleclick"]{display:none!important}
+  css(`div:has(> select[onchange*="'genre'"]),.ignielAdBlock,ins,.adsbygoogle,[id^="google_ads"],iframe[src*="doubleclick"]{display:none!important}
 a:focus-visible,button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:3px solid #e11d2e!important;outline-offset:2px}
 nav a[href*="/category/"]:not([href*="%D9%85%D8%B5%D8%A7%D8%B1%D8%B9%D8%A9"]):not([href*="مصارعة"]),.dropdown-menu a[href*="/category/"]:not([href*="%D9%85%D8%B5%D8%A7%D8%B1%D8%B9%D8%A9"]):not([href*="مصارعة"]){display:none!important}`);
 
@@ -99,10 +99,21 @@ nav a[href*="/category/"]:not([href*="%D9%85%D8%B5%D8%A7%D8%B1%D8%B9%D8%A9"]):no
   function chip() {
     if (!D.body) return;
     let c = D.getElementById('mtk-pc');
-    if (!c) { c = el('button', { id: 'mtk-pc', 'aria-label': 'الملف', onclick: () => profiles() }); D.body.append(c); }
+    let nav = D.getElementById('mtk-nav');
+    if (!nav) {
+      const ic = (d) => '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="' + d + '"/></svg>';
+      const it = (lbl, svg, fn) => { const b = el('button', { class: 'mtk-ni', 'aria-label': lbl, onclick: fn }); b.innerHTML = ic(svg) + '<small>' + lbl + '</small>'; return b; };
+      nav = el('nav', { id: 'mtk-nav' },
+        it('الرئيسية', 'M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z', () => { location.href = CAT; }),
+        it('بحث', 'M15.5 14h-.8l-.3-.3A6.5 6.5 0 1 0 14 15.5l.3.3v.8l5 5 1.5-1.5-5-5zm-6 0a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9z', () => { const i = D.querySelector('.search-input'); if (i) { scrollTo({ top: 0, behavior: 'smooth' }); setTimeout(() => i.focus(), 250); } else location.href = CAT; }),
+        it('قائمتي', 'M12 21.4l-1.5-1.3C5.4 15.4 2 12.3 2 8.5 2 5.4 4.4 3 7.5 3c1.7 0 3.4.8 4.5 2.1C13.1 3.8 14.8 3 16.5 3 19.6 3 22 5.4 22 8.5c0 3.8-3.4 6.9-8.5 11.5z', () => { const m = D.getElementById('mtk-ml') || D.getElementById('mtk-cw'); if (m) m.scrollIntoView({ behavior: 'smooth', block: 'center' }); else location.href = CAT; }));
+      D.body.append(nav);
+    }
+    if (!nav.isConnected) D.body.append(nav);
+    if (!c) { c = el('button', { id: 'mtk-pc', class: 'mtk-ni', 'aria-label': 'الملف', onclick: () => profiles() }); nav.append(c); }
     const p = prof();
     if (c.dataset.p !== p.id + p.n) { c.dataset.p = p.id + p.n; c.textContent = ''; c.append(avatar(p), el('b', null, p.n)); }
-    if (!c.isConnected) D.body.append(c);
+    if (c.parentNode !== nav) nav.append(c);
   }
   css(`#mtk-ov{position:fixed;inset:0;z-index:2147483647;background:#0b0b10;display:none;align-items:center;justify-content:center;overflow:auto;font:15px system-ui,sans-serif;color:#fff}
 #mtk-ov.on{display:flex}
@@ -119,7 +130,16 @@ nav a[href*="/category/"]:not([href*="%D9%85%D8%B5%D8%A7%D8%B1%D8%B9%D8%A9"]):no
 .mtk-pf:focus,.mtk-pf:hover{outline:3px solid #fff;color:#fff}
 .mtk-av{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;color:#fff;font-weight:900}
 #mtk-pc{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:60;display:flex;align-items:center;gap:6px;background:rgba(20,20,28,.85);color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:20px;padding:4px 12px 4px 5px;font:700 13px system-ui,sans-serif;cursor:pointer}
-html.mtk-on #mtk-pc{display:none}`);
+html.mtk-on #mtk-pc{display:none}
+.links,.social-media{display:none!important}
+body{padding-bottom:72px!important}
+#mtk-nav{position:fixed;left:0;right:0;bottom:0;z-index:60;display:flex;justify-content:space-around;align-items:center;height:62px;padding:0 6px env(safe-area-inset-bottom);background:rgba(14,14,20,.96);border-top:1px solid rgba(255,255,255,.12);backdrop-filter:blur(8px);direction:rtl}
+#mtk-nav .mtk-ni{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:none;border:0;color:#bbb;font:600 11px system-ui,sans-serif;cursor:pointer;padding:6px 0;border-radius:12px}
+#mtk-nav .mtk-ni:hover,#mtk-nav .mtk-ni:focus{color:#fff;background:rgba(225,29,46,.18);outline:none}
+#mtk-nav #mtk-pc{position:static!important;transform:none!important;border:0;background:none;padding:6px 0;gap:3px;font:600 11px system-ui,sans-serif;color:#bbb}
+#mtk-nav #mtk-pc .mtk-av{width:24px;height:24px;font-size:13px}
+#mtk-nav #mtk-pc b{font-weight:600;max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+html.mtk-on #mtk-nav,html.mtk-full #mtk-nav{display:none!important}`);
   const bootProf = () => { chip(); gate(() => { if (!localStorage.getItem('mtk-picked') || (pins()[pid()] && sessionStorage.getItem('mtk-unl') !== pid())) profiles(true); }); };
   if (D.readyState === 'loading') D.addEventListener('DOMContentLoaded', bootProf); else bootProf();
   setInterval(chip, 2000);
