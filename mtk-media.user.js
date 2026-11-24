@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK MEDIA
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.9.0
+// @version      1.9.1
 // @description  MTK MEDIA - واجهة موبايل بدون إعلانات لموقع فاصل، تشغيل مباشر من السيرفر الأول
 // @author       MTK
 // @match        *://fasel-hd.co/*
@@ -282,6 +282,7 @@ function MTK() {
         play: 'M7 4l13 8-13 8z',
         close: 'M5 5l14 14M19 5L5 19',
         next: 'M15 5l-7 7 7 7',
+        prev: 'M9 5l7 7-7 7',
       };
       const s = D.createElementNS('http://www.w3.org/2000/svg', 'svg');
       s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('class', 'ic');
@@ -550,8 +551,9 @@ function MTK() {
         try { ['pointerdown', 'touchstart', 'mousemove'].forEach((t) => fr.contentDocument.addEventListener(t, showUI, { capture: true, passive: true })); } catch (e) {}
       });
       const nx = next ? h('a', { class: 'fsn playfs', href: next }, 'الحلقة التالية ', icon('next')) : null;
-      if (nx) nx.addEventListener('click', (e) => { if (!fsBox.classList.contains('ui')) { e.preventDefault(); e.stopImmediatePropagation(); showUI(); } }, true);
-      fsBox.append(fr, fsClose(), nx);
+      const pv = meta && meta.prv ? h('a', { class: 'fsn fsp playfs', href: meta.prv }, icon('prev'), ' الحلقة السابقة') : null;
+      [nx, pv].forEach((a) => a && a.addEventListener('click', (e) => { if (!fsBox.classList.contains('ui')) { e.preventDefault(); e.stopImmediatePropagation(); showUI(); } }, true));
+      fsBox.append(fr, fsClose(), nx, pv);
       showUI();
     }
     function closeFS() {
@@ -831,6 +833,7 @@ function MTK() {
         return h('a', { class: 'ep' + (on ? ' on' : ''), href, 'data-spa': '' }, txt(a).replace(/الحلقة\s*/, ''));
       });
       const nxt = curIdx >= 0 && eps[curIdx + 1] ? abs(eps[curIdx + 1].getAttribute('href'), base) : '';
+      const prv = curIdx > 0 ? abs(eps[curIdx - 1].getAttribute('href'), base) : '';
       const epName = (a) => a ? 'ح' + (txt(a).replace(/الحلقة\s*/, '').trim()) : '';
       const ser = eps.length ? (poster || title) : '';
       const seasons = Array.from(doc.querySelectorAll('.seasonDiv')).map((el) => {
@@ -852,7 +855,7 @@ function MTK() {
       else if (eps.length && sIdx >= 0 && seasons[sIdx + 1]) up = { href: seasons[sIdx + 1].href, title: seasons[sIdx + 1].title || title, img: seasons[sIdx + 1].img || poster, label: 'الموسم التالي' };
       else if (!eps.length) { const c = rel.find((x) => !x.ep && !seenW.has(sidOf(x.href))); if (c) up = { href: c.href, title: c.title, img: c.img, label: 'الفيلم التالي' }; }
       const g = genresOf(doc, base);
-      const meta = { href: base, title, poster, ep: curIdx >= 0 ? epName(eps[curIdx]) : '', ser, up, g, rel: rel.slice(0, 12) };
+      const meta = { href: base, title, poster, ep: curIdx >= 0 ? epName(eps[curIdx]) : '', ser, up, prv, g, rel: rel.slice(0, 12) };
 
       if (hasPlayer) {
         const src = firstServer(doc, base);
@@ -883,7 +886,9 @@ function MTK() {
 
       if (eps.length) {
         if (!hasPlayer) main.append(h('a', { class: 'btn big', href: abs(eps[0].getAttribute('href'), base), 'data-spa': '' }, icon('play'), ' شغّل الحلقة الأولى'));
-        if (nxt) main.append(h('a', { class: 'btn nxt', href: nxt, 'data-spa': '' }, 'الحلقة التالية ', icon('next')));
+        if (prv || nxt) main.append(h('div', { class: 'epnav' },
+          prv ? h('a', { class: 'btn nxt', href: prv, 'data-spa': '' }, icon('prev'), ' الحلقة السابقة') : null,
+          nxt ? h('a', { class: 'btn nxt', href: nxt, 'data-spa': '' }, 'الحلقة التالية ', icon('next')) : null));
         main.append(h('section', { class: 'row' }, h('div', { class: 'rhead' }, h('h3', null, 'الحلقات (' + eps.length + ')')), h('div', { class: 'eps' }, epLinks)));
       }
 
@@ -892,7 +897,29 @@ function MTK() {
           h('div', { class: 'scroller' }, seasons.map((c) => { const e = cardEl(c); if (c.on) e.classList.add('on'); return e; }))));
       }
 
-      if (rel.length) main.append(rowEl({ title: 'قد يعجبك', items: rel.slice(0, 20) }));
+      if (eps.length) {
+        const own = new Set([base].concat(seasons.map((c) => c.href)).map(sidOf));
+        const keep = (c) => !own.has(sidOf(c.href)) && !/\/movies?\//.test(c.href) && (c.title || '').trim() !== title.trim();
+        const pool = rel.filter(keep);
+        const slot = h('div');
+        main.append(slot);
+        const tok = navToken;
+        const done_ = (items) => {
+          if (tok !== navToken) return;
+          const seenH = new Set();
+          items = items.filter((c) => !seenH.has(c.href) && seenH.add(c.href)).slice(0, 20);
+          if (items.length) slot.replaceWith(rowEl({ title: 'مسلسلات قد تعجبك', items })); else slot.remove();
+        };
+        const urls = g.filter((x) => x.u).map((x) => x.u).slice(0, 1).concat([ORIGIN + '/series_top_views']);
+        const more = (i, acc) => {
+          if (acc.length >= 8 || i >= urls.length) return done_(acc);
+          load(urls[i]).then((r) => {
+            const all = [].concat(...groups(r.doc, r.url).map((x) => x.items)).filter(keep);
+            more(i + 1, acc.concat(all));
+          }, () => more(i + 1, acc));
+        };
+        more(0, pool);
+      } else if (rel.length) main.append(rowEl({ title: 'قد يعجبك', items: rel.slice(0, 20) }));
     }
 
     function CSS() {
@@ -961,6 +988,8 @@ a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(-
 #mtk-fs iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 #mtk-fs .loader{height:100%;padding:0;align-items:center}
 #mtk-fs .fsx,#mtk-fs .fsn{opacity:0;transition:opacity .3s}
+#mtk-fs .fsn.fsp{top:calc(56px + env(safe-area-inset-top))}
+.epnav{display:flex;gap:10px;margin:0 16px 4px}.epnav .btn{flex:1;margin:0;justify-content:center}
 #mtk-fs.ui .fsx,#mtk-fs.ui .fsn,#mtk-fs .loader~.fsx{opacity:1}
 #mtk-fs .fsx{position:absolute;top:calc(10px + env(safe-area-inset-top));left:10px;z-index:3;background:rgba(0,0,0,.55);border-radius:50%;color:#fff}
 #mtk-fs .fsn{position:absolute;top:calc(10px + env(safe-area-inset-top));right:10px;z-index:3;display:flex;align-items:center;gap:4px;background:rgba(0,0,0,.55);color:#fff;border-radius:20px;padding:8px 12px;font-size:13px;font-weight:700}
