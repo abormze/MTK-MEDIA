@@ -53,7 +53,8 @@ public class MainActivity extends Activity {
     private WebView web;
     private View customView;
     private WebChromeClient.CustomViewCallback customCb;
-    private boolean docStart;
+    private boolean docStart, resumed;
+    private long lastUpd;
     private String script;
     private static final String HOSTS_URL = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts";
     private static final Pattern KEEP = Pattern.compile("(^|\\.)(fasel[^.]*\\.[a-z.]+|faselhdcdn\\.com|scdns\\.io|wp\\.com|jwplayer\\.com|jwpcdn\\.com|cloudflare\\.com|github\\.io|githubusercontent\\.com)$");
@@ -334,6 +335,7 @@ public class MainActivity extends Activity {
     }
 
     private void updateScript() {
+        lastUpd = System.currentTimeMillis();
         new Thread(() -> {
             try {
                 HttpURLConnection c = (HttpURLConnection) new URL(SCRIPT_URL + "?t=" + System.currentTimeMillis()).openConnection();
@@ -345,6 +347,10 @@ public class MainActivity extends Activity {
                 File tmp = new File(getFilesDir(), "mtk.tmp");
                 try (FileOutputStream o = new FileOutputStream(tmp)) { o.write(js.getBytes(StandardCharsets.UTF_8)); }
                 tmp.renameTo(cacheFile());
+                if (cmpVer(ver(js), ver(script)) > 0) runOnUiThread(() -> {
+                    if (!resumed || isFinishing()) return;
+                    web.evaluateJavascript("document.querySelector('#mtk-fs.open')?1:0", v -> { if ("0".equals(v) && resumed) recreate(); });
+                });
             } catch (Exception ignored) {
             }
         }).start();
@@ -488,8 +494,19 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        resumed = true;
+        if (lastUpd > 0 && System.currentTimeMillis() - lastUpd > 15 * 60000) {
+            updateScript();
+            Updater.check(this, "https://abormze.github.io/MTK-MEDIA/mobile/version.json");
+        }
+    }
+
+    @Override
     protected void onPause() {
         super.onPause();
+        resumed = false;
         CookieManager.getInstance().flush();
     }
 
