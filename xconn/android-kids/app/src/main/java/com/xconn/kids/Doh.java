@@ -29,7 +29,15 @@ final class Doh {
     private static final String[] RESOLVERS = {
             "https://1.1.1.1/dns-query?type=A&name=",
             "https://8.8.8.8/resolve?type=A&name=",
+            "https://1.0.0.1/dns-query?type=A&name=",
+            "https://8.8.4.4/resolve?type=A&name=",
+            "https://dns.google/resolve?type=A&name=",
+            "https://cloudflare-dns.com/dns-query?type=A&name=",
+            "https://dns.adguard-dns.com/resolve?type=A&name=",
             "https://9.9.9.9:5053/dns-query?type=A&name="};
+    // Cloudflare anycast edges; any edge serves any Cloudflare site by SNI.
+    private static final String[] CF = {"104.21.2.36", "172.67.128.171", "104.26.2.12", "172.67.70.25"};
+    static volatile String lastError = "";
     private static final Map<String, List<InetAddress>> cache = new ConcurrentHashMap<>();
     private static final Set<String> blocked = ConcurrentHashMap.newKeySet();
     private static final Set<String> fine = ConcurrentHashMap.newKeySet();
@@ -62,35 +70,57 @@ final class Doh {
         }
     }
 
+    private static boolean onCf(String host) {
+        return host.endsWith("cartoony.net") || host.endsWith("spacetoongo.com") || host.endsWith("carateen.tv");
+    }
+
+    private static List<InetAddress> ask(String r, String host) {
+        List<InetAddress> out = new ArrayList<>();
+        try {
+            HttpURLConnection h = (HttpURLConnection) new URL(r + host).openConnection();
+            h.setConnectTimeout(4000);
+            h.setReadTimeout(4000);
+            h.setRequestProperty("Accept", "application/dns-json");
+            InputStream in = h.getInputStream();
+            ByteArrayOutputStream bo = new ByteArrayOutputStream();
+            byte[] buf = new byte[4096];
+            int n;
+            while ((n = in.read(buf)) > 0) bo.write(buf, 0, n);
+            in.close();
+            JSONArray ans = new JSONObject(bo.toString("UTF-8")).optJSONArray("Answer");
+            if (ans != null) for (int i = 0; i < ans.length(); i++) {
+                JSONObject o = ans.getJSONObject(i);
+                if (o.optInt("type") == 1) out.add(InetAddress.getByName(o.getString("data")));
+            }
+        } catch (Exception e) {
+            lastError = r.replaceAll("^https://([^/]+).*", "$1") + ": " + e;
+        }
+        return out;
+    }
+
     static List<InetAddress> resolve(String host) {
         List<InetAddress> c = cache.get(host);
         if (c != null) return c;
         List<InetAddress> out = new ArrayList<>();
-        for (String r : RESOLVERS) {
-            try {
-                HttpURLConnection h = (HttpURLConnection) new URL(r + host).openConnection();
-                h.setConnectTimeout(6000);
-                h.setReadTimeout(6000);
-                h.setRequestProperty("Accept", "application/dns-json");
-                InputStream in = h.getInputStream();
-                ByteArrayOutputStream bo = new ByteArrayOutputStream();
-                byte[] buf = new byte[4096];
-                int n;
-                while ((n = in.read(buf)) > 0) bo.write(buf, 0, n);
-                in.close();
-                JSONArray ans = new JSONObject(bo.toString("UTF-8")).optJSONArray("Answer");
-                if (ans != null) for (int i = 0; i < ans.length(); i++) {
-                    JSONObject o = ans.getJSONObject(i);
-                    if (o.optInt("type") == 1) out.add(InetAddress.getByName(o.getString("data")));
-                }
-                if (!out.isEmpty()) break;
-            } catch (Exception ignored) {}
+        if (onCf(host)) {
+            for (String ip : CF) try { out.add(InetAddress.getByName(ip)); } catch (Exception ignored) {}
+            cache.put(host, out);
+            final List<InetAddress> cf = out;
+            new Thread(() -> { for (String r : RESOLVERS) { List<InetAddress> l = ask(r, host); if (!l.isEmpty()) { List<InetAddress> m = new ArrayList<>(l); for (InetAddress a : cf) if (!m.contains(a)) m.add(a); cache.put(host, m); return; } } }).start();
+            return out;
         }
+        java.util.concurrent.ExecutorService ex = java.util.concurrent.Executors.newFixedThreadPool(RESOLVERS.length);
+        try {
+            List<java.util.concurrent.Callable<List<InetAddress>>> jobs = new ArrayList<>();
+            for (String r : RESOLVERS) jobs.add(() -> { List<InetAddress> l = ask(r, host); if (l.isEmpty()) throw new Exception("empty"); return l; });
+            out = ex.invokeAny(jobs, 10, TimeUnit.SECONDS);
+        } catch (Exception ignored) {
+        } finally { ex.shutdownNow(); }
         if (!out.isEmpty()) cache.put(host, out);
         return out;
     }
 
-    static WebResourceResponse fetch(String url, Map<String, String> req) {
+    static WebResourceResponse fetch(String url, Map<String, String> req, boolean main) {
         try {
             Request.Builder b = new Request.Builder().url(url);
             if (req != null) for (Map.Entry<String, String> e : req.entrySet()) {
@@ -120,7 +150,9 @@ final class Doh {
             if (msg == null || msg.trim().isEmpty()) msg = code < 400 ? "OK" : "Error";
             return new WebResourceResponse(mime, cs, code, msg, hs, res.body().byteStream());
         } catch (Exception e) {
-            return null;
+            if (!main) return null;
+            String html = "<html><body style='background:#111;color:#fff;font:20px sans-serif;padding:30px' dir='rtl'><h2>ما قدرنا نوصل للموقع</h2><p dir='ltr' style='color:#f88'>" + android.text.TextUtils.htmlEncode(String.valueOf(e)) + "</p><p dir='ltr' style='color:#aaa'>DNS: " + android.text.TextUtils.htmlEncode(lastError) + "</p><p>XCONN KIDS " + "1.3.1" + "</p></body></html>";
+            return new WebResourceResponse("text/html", "utf-8", new java.io.ByteArrayInputStream(html.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
         }
     }
 }
