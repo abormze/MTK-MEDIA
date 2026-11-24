@@ -1489,7 +1489,7 @@ body{max-width:none;padding-bottom:calc(64px + env(safe-area-inset-bottom))}
 .ginp{font-size:20px;padding:12px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--txt);text-align:center}
 .hcar .hero{position:relative;height:52vw;max-height:540px;min-height:220px;overflow:hidden;background:#000}
 .hcar .hero img{width:100%;height:100%;object-fit:cover;display:block}
-.hcar .hinfo{position:absolute;left:0;right:0;bottom:0;padding:18px 16px 30px;background:linear-gradient(transparent,rgba(0,0,0,.92))}
+.hcar .hinfo{position:absolute;left:0;right:0;bottom:0;padding:18px 58px 30px;background:linear-gradient(transparent,rgba(0,0,0,.92))}
 .hcar .hinfo h2{margin:0 0 10px;font-size:22px;line-height:1.3;text-shadow:0 2px 8px #000}
 .hcar .hbadge{display:inline-block;background:var(--acc);color:#fff;border-radius:6px;padding:2px 8px;font-size:12px;margin-bottom:6px}
 .hcar .hplay{display:inline-flex;align-items:center;gap:6px;background:var(--acc);color:#fff;border-radius:22px;padding:9px 18px;text-decoration:none;font-weight:700}
