@@ -31,6 +31,8 @@ public class PlayerActivity extends Activity {
     private boolean ended, failed, upCancel, goNext;
     private String upNext;
     private android.widget.TextView upView, skipView;
+    private boolean skipDone;
+    private long skipAt;
     private static final float[] RATES = {1f, 1.25f, 1.5f, 0.75f};
     private static final int[] SLEEPS = {0, 30, 60, 90};
     private int rateI, sleepI;
@@ -40,7 +42,10 @@ public class PlayerActivity extends Activity {
         public void run() {
             if (player == null || skipView == null) return;
             long p = player.getCurrentPosition();
-            skipView.setVisibility(upNext != null && p > 3000 && p < 240000 ? View.VISIBLE : View.GONE);
+            boolean show = !skipDone && upNext != null && upNext.contains("الحلقة") && p > 3000 && p < 150000;
+            if (show && skipAt == 0) skipAt = System.currentTimeMillis();
+            if (show && System.currentTimeMillis() - skipAt > 12000) { skipDone = true; show = false; }
+            skipView.setVisibility(show ? View.VISIBLE : View.GONE);
             ui.postDelayed(this, 1000);
         }
     };
@@ -50,6 +55,7 @@ public class PlayerActivity extends Activity {
     private void skipIntro() {
         player.seekTo(player.getCurrentPosition() + 85000);
         skipView.setVisibility(View.GONE);
+        skipDone = true;
         toast("تخطّينا المقدمة");
     }
     private final android.os.Handler ui = new android.os.Handler(android.os.Looper.getMainLooper());
@@ -210,7 +216,7 @@ public class PlayerActivity extends Activity {
                     toast("السرعة " + RATES[rateI] + "x");
                     return true;
                 case KeyEvent.KEYCODE_DPAD_DOWN:
-                    if (player.getCurrentPosition() < 300000) skipIntro(); else view.showController();
+                    if (skipView.getVisibility() == View.VISIBLE) skipIntro(); else view.showController();
                     return true;
                 case KeyEvent.KEYCODE_MENU:
                 case KeyEvent.KEYCODE_INFO:

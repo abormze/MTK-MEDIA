@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK MEDIA
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.12.0
+// @version      1.12.1
 // @description  MTK MEDIA - واجهة موبايل بدون إعلانات لموقع فاصل، تشغيل مباشر من السيرفر الأول
 // @author       MTK
 // @match        *://fasel-hd.co/*
@@ -640,7 +640,7 @@ function MTK() {
       [nx, pv].forEach((a) => a && a.addEventListener('click', (e) => { if (!fsBox.classList.contains('ui')) { e.preventDefault(); e.stopImmediatePropagation(); showUI(); } }, true));
       const send = (m) => { try { fr.contentWindow.postMessage(Object.assign({ mtk2: 1 }, m), '*'); } catch (e) {} };
       const sk = meta && meta.ser ? h('button', { class: 'fsk', onclick: () => { send({ seek: 85 }); sk.remove(); } }, 'تخطّي المقدمة ', icon('next')) : null;
-      if (sk) setTimeout(() => sk.remove(), 240000);
+      if (sk) setTimeout(() => sk.remove(), 15000);
       const sp = h('button', { class: 'fsc', onclick: guard(() => { rate = RATES[(RATES.indexOf(rate) + 1) % RATES.length]; sp.textContent = 'السرعة ' + rate + 'x'; send({ rate }); }) }, 'السرعة ' + rate + 'x');
       const sl = h('button', { class: 'fsc', onclick: guard(() => { sleepIdx = (sleepIdx + 1) % SLEEPS.length; setSleep(); sl.textContent = sleepLbl(); }) }, sleepLbl());
       fsBox.append(fr, fsClose(), nx, pv, sk, h('div', { class: 'fsbar' }, sp, sl));
