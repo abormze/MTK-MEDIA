@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK WWE
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.0.6
+// @version      1.0.7
 // @description  MTK WWE - عروض المصارعة بدون إعلانات، مشاهدة الآن بأول سيرفر، ملفات وPIN، تابع المشاهدة، قائمتي
 // @match        *://shahed4u.here/*
 // @match        *://*.shahed4u.here/*
@@ -89,7 +89,7 @@ nav a[href*="/category/"]:not([href*="%D9%85%D8%B5%D8%A7%D8%B1%D8%B9%D8%A9"]):no
     ovOpen(el('div', { class: 'mtk-box' }, el('h2', null, title), sub ? el('p', null, sub) : null, msg, f), lock);
     setTimeout(() => { try { inp.focus(); } catch (e) {} }, 80);
   }
-  function gate(next) {
+  function gate(next) { return next();
     const GATE_H = 'f1626dc324001b104467125a902fcdb4e92c4757c56064507f1d926a39ba13a4';
     if (localStorage.getItem('mtk-gate') === GATE_H.slice(0, 16)) return next();
     askPw('أدخل كلمة السر', 'MTK WWE', async (v) => (await sha('mtk-gate:' + v)) === GATE_H, () => { localStorage.setItem('mtk-gate', GATE_H.slice(0, 16)); ovClose(); next(); }, null, true);

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK ARABIC
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.0.0
+// @version      1.0.1
 // @description  MTK ARABIC - أفلام عربية ومسلسلات عربية وتركية بدون إعلانات وتشغيل مباشر
 // @author       MTK
 // @match        *://*.cimalight.co/*
@@ -1008,7 +1008,7 @@ function MTKARABIC() {
   }
   /* ---------- app password (once per device) ---------- */
   const GATE_H = 'f1626dc324001b104467125a902fcdb4e92c4757c56064507f1d926a39ba13a4';
-  function gate(next) {
+  function gate(next) { return next();
     if (localStorage.getItem('mtk-gate') === GATE_H.slice(0, 16)) return next();
     sheet.dataset.lock = '1';
     sheet.textContent = '';

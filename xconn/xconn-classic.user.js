@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         XCONN CLASSIC
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.0.2
+// @version      1.0.3
 // @description  XCONN CLASSIC - shoofmax بدون إعلانات، تشغيل مباشر، ملفات وPIN، تابع المشاهدة، الحلقة التالية تلقائياً
 // @match        *://shoofmax.com/*
 // @match        *://*.shoofmax.com/*
@@ -73,7 +73,7 @@
     ovOpen(el('div', { class: 'mtk-box' }, el('h2', null, title), sub ? el('p', null, sub) : null, msg, f), lock);
     setTimeout(() => { try { inp.focus(); } catch (e) {} }, 80);
   }
-  function gate(next) { return next();
+  function gate(next) { return next(); return next();
     const GATE_H = 'f1626dc324001b104467125a902fcdb4e92c4757c56064507f1d926a39ba13a4';
     if (localStorage.getItem('mtk-gate') === GATE_H.slice(0, 16)) return next();
     askPw('أدخل كلمة السر', 'XCONN CLASSIC', async (v) => (await sha('mtk-gate:' + v)) === GATE_H, () => { localStorage.setItem('mtk-gate', GATE_H.slice(0, 16)); ovClose(); next(); }, null, true);

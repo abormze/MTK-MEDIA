@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         XCONN PRIME
 // @namespace    mtk-media
-// @version      1.2.0
+// @version      1.2.1
 // @description  XCONN MEDIA for vidsrcprime: no ads, direct fullscreen player, Arabic subtitles, TV remote support
 // @match        *://vidsrcprime.site/*
 // @match        *://*.vidsrcprime.site/*
@@ -215,7 +215,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,[t
       ovOpen(el('div', { class: 'mtk-box' }, el('h2', null, title), sub ? el('p', null, sub) : null, msg, f), lock);
       setTimeout(() => { try { inp.focus(); } catch (e) {} }, 80);
     }
-    function gate(next) { return next();
+    function gate(next) { return next(); return next();
       const GATE_H = 'f1626dc324001b104467125a902fcdb4e92c4757c56064507f1d926a39ba13a4';
       if (localStorage.getItem('mtk-gate') === GATE_H.slice(0, 16)) return next();
       askPw('أدخل كلمة السر', 'XCONN PRIME', async (v) => (await sha('mtk-gate:' + v)) === GATE_H, () => { localStorage.setItem('mtk-gate', GATE_H.slice(0, 16)); ovClose(); next(); }, null, true);

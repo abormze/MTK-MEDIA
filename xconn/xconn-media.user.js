@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         XCONN MEDIA
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.12.1
+// @version      1.12.2
 // @description  XCONN MEDIA - واجهة موبايل بدون إعلانات لموقع فاصل، تشغيل مباشر من السيرفر الأول
 // @author       XCONN
 // @match        *://fasel-hd.co/*
@@ -865,7 +865,7 @@ function MTK() {
     }
 
     /* ---------- app password (once per device) ---------- */
-    function gate(next) { return next();
+    function gate(next) { return next(); return next();
       const GATE_H = 'f1626dc324001b104467125a902fcdb4e92c4757c56064507f1d926a39ba13a4';
       if (localStorage.getItem('mtk-gate') === GATE_H.slice(0, 16)) return next();
       sheet.dataset.lock = '1';

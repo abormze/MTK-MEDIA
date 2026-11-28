@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         XCONN KIDS
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.1.2
+// @version      1.1.3
 // @description  XCONN KIDS - كرتون بدون إعلانات، تشغيل مباشر، ملفات شخصية، تابع المشاهدة
 // @author       XCONN
 // @match        *://cartoony.net/*
@@ -732,7 +732,7 @@ function MTKKIDS() {
 
   /* ---------- app password (once per device) ---------- */
   const GATE_H = 'f1626dc324001b104467125a902fcdb4e92c4757c56064507f1d926a39ba13a4';
-  function gate(next) { return next();
+  function gate(next) { return next(); return next();
     if (localStorage.getItem('mtk-gate') === GATE_H.slice(0, 16)) return next();
     sheet.dataset.lock = '1';
     sheet.textContent = '';
