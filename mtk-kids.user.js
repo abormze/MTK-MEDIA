@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MTK KIDS
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.1.3
+// @version      1.2.0
 // @description  MTK KIDS - كرتون بدون إعلانات، تشغيل مباشر، ملفات شخصية، تابع المشاهدة
 // @author       MTK
 // @match        *://cartoony.net/*
@@ -53,12 +53,13 @@ function MTKKIDS() {
         netCb[id] = res;
         window.MTKNet.req(id, new URL(path, location.href).href, body ? JSON.stringify(body) : '', JSON.stringify(h));
       });
-      if (t) { try { const j = JSON.parse(t); return j && j.encryptedData ? dec(j) : j; } catch (e) {} }
+      const j = JSON.parse(t);
+      return j && j.encryptedData ? dec(j) : j;
     }
     const r = await fetch(path, { method: body ? 'POST' : 'GET', credentials: 'include', headers: Object.assign({}, HDR, body ? { 'content-type': 'application/json' } : {}), body: body ? JSON.stringify(body) : undefined });
     const t = await r.text();
     let j;
-    try { j = JSON.parse(t); } catch (e) { cfFail(); throw e; }
+    j = JSON.parse(t);
     return j && j.encryptedData ? dec(j) : j;
   }
   function cfFail() {
@@ -68,14 +69,28 @@ function MTKKIDS() {
     sessionStorage.setItem(CF, '1');
     location.reload();
   }
+  function txt(url, hd) {
+    const hh = Object.assign({ 'user-agent': navigator.userAgent, accept: 'text/html,application/json,*/*' }, hd || {});
+    if (window.MTKNet) return new Promise((res) => { const id = 'n' + (++netId); netCb[id] = res; window.MTKNet.req(id, url, '', JSON.stringify(hh)); });
+    return fetch(url).then((r) => r.text()).catch(() => '');
+  }
+  const tmo = (p, ms) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error('timeout')), ms))]);
   const cache = {};
-  async function cached(k, path, ttl) {
+  async function cached(k, path, ttl, fn) {
     if (cache[k]) return cache[k];
-    try { const c = JSON.parse(localStorage.getItem('mtk-c-' + k)); if (c && Date.now() - c.t < ttl) return (cache[k] = c.v); } catch (e) {}
-    const v = await api(path);
-    sessionStorage.removeItem('mtk-cfn');
-    try { localStorage.setItem('mtk-c-' + k, JSON.stringify({ t: Date.now(), v })); } catch (e) {}
-    return (cache[k] = v);
+    let c = null;
+    try { c = JSON.parse(localStorage.getItem('mtk-c-' + k)); } catch (e) {}
+    const load = async () => {
+      const v = await tmo(fn ? fn() : api(path), 15000);
+      if (v == null || (Array.isArray(v) && !v.length)) throw new Error('empty');
+      try { localStorage.setItem('mtk-c-' + k, JSON.stringify({ t: Date.now(), v })); } catch (e) {}
+      return v;
+    };
+    if (c && c.v) {
+      if (Date.now() - c.t > ttl) load().catch(() => {});
+      return (cache[k] = c.v);
+    }
+    return (cache[k] = await load());
   }
 
   /* ---------- data model ---------- */
@@ -102,20 +117,73 @@ function MTKKIDS() {
       v: +s.views || 0, r: +s.rating || 0, n: +s.ep_count || 0, desc: (s.pref || '').trim(), age: +s.min_age || 0, on: true,
     };
   }
+  const SRCN = { d: 'دماكيدز', f: 'سبيس باور فان' };
+  function fromX(s, i) {
+    return {
+      k: s.k, id: String(s.id), t: s.t, u: s.u, mv: !!s.mv, cat: SRCN[s.k] || '', y: '',
+      img: s.img || '', hero: s.k === 'f' ? s.img || '' : '',
+      g: (s.g && s.g.length ? s.g : [s.mv ? 'أفلام' : 'كرتون']).map(normG),
+      v: Math.max(1, 600 - i), r: 0, n: 0, desc: s.desc || '', age: s.age || 7, on: true,
+    };
+  }
+  const CAT = 'https://abormze.github.io/MTK-MEDIA/kids/cat.json';
+  const arr = (a) => (Array.isArray(a) ? a : []);
   let ALL = null;
   async function all() {
     if (ALL) return ALL;
-    const [c, s] = await Promise.all([
+    const [c, s, x] = await Promise.all([
       cached('c', '/api/tvshows', 3600e3).catch(() => []),
       cached('s', '/api/sp/tvshows', 3600e3).catch(() => []),
+      cached('x', '', 6 * 3600e3, async () => JSON.parse(await txt(CAT + '?h=' + Math.floor(Date.now() / 36e5))).src).catch(() => ({})),
     ]);
-    ALL = c.map(fromC).concat(s.map(fromS)).filter((x) => x.on && x.t);
-    return ALL;
+    const seen = {}, out = [];
+    const push = (y) => {
+      const n = norm(y.t).replace(/\s*(مدبلج|بالعربي|بالعربية|كامل)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+      const ex = seen[n];
+      if (ex) { (ex.alt = ex.alt || []).push(y); return; }
+      seen[n] = y; out.push(y);
+    };
+    arr(c).map(fromC).concat(arr(s).map(fromS)).filter((y) => y.on && y.t).forEach(push);
+    ['f', 'd'].forEach((k) => arr(x && x[k]).forEach((y, i) => y && y.t && push(fromX(y, i))));
+    if (!out.length) throw new Error('empty');
+    return (ALL = out);
   }
   const vis = (list) => (kids() ? list.filter((x) => x.age <= 7) : list);
-  const showHref = (x) => (x.k === 's' ? '/watch/sp/' : '/watch/') + x.id;
+  const PRE = { s: 'sp/', d: 'dk/', f: 'sf/' }, PREK = { sp: 's', dk: 'd', sf: 'f' };
+  const showHref = (x) => '/watch/' + (PRE[x.k] || '') + x.id;
   const findShow = async (k, id) => (await all()).find((x) => x.k === k && x.id === String(id));
+  const DK = ['https://www.dimakids.com/', 'https://arabic-toons.com/'];
+  async function page(urls) {
+    for (const u of urls) {
+      try {
+        const t = await tmo(txt(u, { referer: new URL(u).origin + '/' }), 15000);
+        if (t && t.length > 500) return { doc: new DOMParser().parseFromString(t, 'text/html'), t };
+      } catch (e) {}
+    }
+    throw new Error('down');
+  }
   async function episodes(x) {
+    if (x.k === 'd') {
+      if (/movies-streaming/.test(x.u)) return [{ id: x.id, n: 1, t: x.t, img: x.img, d: 0, u: x.u }];
+      return cached('de' + x.id, '', 1800e3, async () => {
+        const { doc } = await page(DK.map((b) => b + x.u));
+        return Array.from(doc.querySelectorAll('.episodes-grid a[href]')).map((a, i) => {
+          const it = a.querySelector('[data-episode-id]'), im = a.querySelector('img'), nb = a.querySelector('.episode-number');
+          const n = (nb && parseInt(nb.textContent, 10)) || i + 1;
+          return { id: it ? it.getAttribute('data-episode-id') : String(n), n, t: 'الحلقة ' + n, img: im ? im.getAttribute('src') : '', d: 0, u: a.getAttribute('href').replace(/#.*/, '') };
+        });
+      });
+    }
+    if (x.k === 'f') {
+      return cached('fe' + x.id, '', 1800e3, async () => {
+        const { doc } = await page(['https://spacepowerfan.com' + x.u]);
+        return Array.from(doc.querySelectorAll('[data-ep-search] a[href*="/watch/"]')).map((a, i) => {
+          const im = a.querySelector('img'), n = parseInt(a.closest('[data-ep-search]').getAttribute('data-ep-search'), 10) || i + 1;
+          const u = a.getAttribute('href');
+          return { id: u.split('/').filter(Boolean).pop(), n, t: x.mv ? x.t : 'الحلقة ' + n, img: im ? im.getAttribute('src') : '', d: 0, u };
+        }).sort((a, b) => a.n - b.n);
+      });
+    }
     if (x.k === 's') {
       const l = await cached('se' + x.id, '/api/sp/episodes?id=' + x.id, 600e3);
       return l.slice().sort((a, b) => a.number - b.number).map((e) => ({ id: String(e.slug || e.id), n: e.number, t: (x.mv ? x.t : 'الحلقة ' + e.number) + (e.pref && !x.mv ? ' - ' + e.pref : ''), img: e.cover_full_path || '', d: e.duration || 0 }));
@@ -124,7 +192,39 @@ function MTKKIDS() {
     return l.slice().sort((a, b) => a.order_id - b.order_id).map((e, i) => ({ id: String(e.id), n: e.order_id || i + 1, t: x.mv ? x.t : e.title, img: e.thumbnail ? '/assets/img/thumbnails/' + e.thumbnail : '', d: 0 }));
   }
   const anon = () => { let a = localStorage.getItem('mtk-anon'); if (!a) { a = 'anon_' + Math.random().toString(36).slice(2, 13) + '_' + Date.now().toString(36); localStorage.setItem('mtk-anon', a); } return a; };
+  async function streamAny(x, ep) {
+    try { const s = await tmo(stream(x, ep), 20000); if (s && s.url) return s; } catch (e) {}
+    for (const a of x.alt || []) {
+      try {
+        const l = await episodes(a);
+        const e2 = l.find((e) => e.n === ep.n) || (l.length === 1 ? l[0] : null);
+        if (e2) { const s = await tmo(stream(a, e2), 20000); if (s && s.url) return s; }
+      } catch (e) {}
+    }
+    return null;
+  }
   async function stream(x, ep) {
+    if (x.k === 'd') {
+      const { t } = await page(DK.map((b) => b + ep.u));
+      const m = t.match(/videoSrc\s*=\s*["']([^"']+)/);
+      return { url: m ? m[1] : '', skip: null };
+    }
+    if (x.k === 'f') {
+      const { doc } = await page([ep.u]);
+      const el = doc.querySelector('script[data-player-sources]');
+      const j = el ? JSON.parse(el.textContent) : [];
+      for (const s of j) for (const l of s.links || []) {
+        let u = l.url || '';
+        try { const q = new URL(u).searchParams.get('video_url'); if (q) u = q; } catch (e) {}
+        if (!/\.(mp4|m3u8)|get_video/i.test(u)) continue;
+        if (window.MTKNet && window.MTKNet.fin) {
+          const f = await tmo(new Promise((res) => { const id = 'n' + (++netId); netCb[id] = res; window.MTKNet.fin(id, u, JSON.stringify({ referer: 'https://spacepowerfan.com/', 'user-agent': navigator.userAgent })); }), 15000).catch(() => '');
+          if (f) u = f;
+        }
+        return { url: u, skip: null };
+      }
+      return { url: '', skip: null };
+    }
     if (x.k === 's') {
       const r = await api('/api/sp/episode/link', { episodeId: ep.id, userId: anon() });
       return { url: r.link, skip: r.skip_intro && r.skip_intro[1] > r.skip_intro[0] ? r.skip_intro : null };
@@ -145,7 +245,7 @@ function MTKKIDS() {
     }
     kids.flat(Infinity).forEach((c) => { if (c != null && c !== false) el.append(c.nodeType ? c : String(c)); });
     if (tag === 'img') {
-      el.referrerPolicy = 'no-referrer';
+      if (!/dimakids|arabic-toons/.test(el.getAttribute('src') || '')) el.referrerPolicy = 'no-referrer';
       el.addEventListener('error', () => { const f = el.dataset.fb; if (f && el.src !== new URL(f, location.href).href) { el.src = f; delete el.dataset.fb; } else el.style.visibility = 'hidden'; });
     }
     return el;
@@ -331,13 +431,15 @@ function MTKKIDS() {
       if (tok !== navToken) return;
       main.textContent = '';
       if (p === '/') return home();
-      if (p === '/mtk/series') return browse((x) => !x.mv && x.k === 'c', 'مسلسلات');
+      if (p === '/mtk/series') return browse((x) => !x.mv && (x.k === 'c' || x.k === 'f'), 'مسلسلات');
+      if (p === '/mtk/dk') return browse((x) => x.k === 'd', 'دماكيدز');
+      if (p === '/mtk/sf') return browse((x) => x.k === 'f', 'سبيس باور فان');
       if (p === '/mtk/movies') return browse((x) => x.mv, 'أفلام');
       if (p === '/mtk/sp') return browse((x) => x.k === 's', 'سبيستون', true);
       if (p === '/mtk/list') return listPage();
       if (p === '/mtk/search') return searchPage();
       if (p === '/mtk/g') return genrePage();
-      if ((m = p.match(/^\/watch\/(sp\/)?(\d+)(?:\/(\d+))?$/))) return detail(m[1] ? 's' : 'c', m[2], m[3], tok);
+      if ((m = p.match(/^\/watch\/(?:(sp|dk|sf)\/)?(\d+)(?:\/([^/]+))?$/))) return detail(m[1] ? PREK[m[1]] : 'c', m[2], m[3], tok);
       return home();
     } catch (e) {
       if (tok !== navToken) return;
@@ -429,6 +531,9 @@ function MTKKIDS() {
     add(rowEl('أعلى 10 أفلام', L.filter((x) => x.mv).sort((a, b) => b.v - a.v).slice(0, 10), { num: 1, cls: 'top10' }));
     tg.forEach((g) => add(rowEl('لأنك بتحب ' + g, shuffle(byG(L, g).filter((x) => !seen.has(sk(x))), day + 1).slice(0, 20), { more: gl(g) })));
     const G = kids() ? ['بون بون', 'زمردة', 'مغامرات', 'كوميدي', 'علوم', 'أبجد', 'سبيستون مام'] : ['مغامرات', 'أكشن', 'كوميدي', 'خيال علمي', 'رياضة', 'زمردة', 'بون بون', 'سبيس باور', 'شارع الأنمي', 'دراما', 'تاريخي', 'خيال', 'ميكا'];
+    add(rowEl('سبيس باور فان', L.filter((x) => x.k === 'f').slice(0, 24), { more: '/mtk/sf' }));
+    add(rowEl('كرتون دماكيدز', L.filter((x) => x.k === 'd' && !x.mv).slice(0, 24), { more: '/mtk/dk' }));
+    add(rowEl('أفلام دماكيدز', L.filter((x) => x.k === 'd' && x.mv).slice(0, 24), { more: '/mtk/dk' }));
     add(rowEl('مسلسلات مدبلجة', L.filter((x) => x.k === 'c' && !x.mv).sort((a, b) => b.r - a.r).slice(0, 20), { more: '/mtk/series' }));
     add(rowEl('أفلام كرتون', L.filter((x) => x.mv).sort((a, b) => b.v - a.v).slice(10, 30), { more: '/mtk/movies' }));
     G.forEach((g) => { if (!tg.includes(g)) add(rowEl(g, shuffle(byG(L, g), day + g.length).slice(0, 20), { more: gl(g) })); });
@@ -522,6 +627,10 @@ function MTKKIDS() {
     if (simR) main.append(simR);
     let eps;
     try { eps = await episodes(x); } catch (e) { eps = []; }
+    for (const a of (!eps.length && x.alt) || []) {
+      try { eps = await episodes(a); } catch (e) { eps = []; }
+      if (eps.length) { x.k = a.k; x.id = a.id; x.u = a.u; break; }
+    }
     if (tok !== navToken) return;
     epBox.textContent = '';
     if (!eps.length) { epBox.append(h('div', { class: 'empty' }, 'ما في حلقات')); return; }
@@ -654,7 +763,7 @@ function MTKKIDS() {
     curSid = rec.sid;
     curUp = upNext(x, eps, i);
     upCancel = false;
-    const s = await stream(x, ep).catch(() => null);
+    const s = await streamAny(x, ep).catch(() => null);
     if (!fsOn || lastPlay[2] !== ep) return;
     if (!s || !s.url) { fsBox.textContent = ''; fsBox.append(h('div', { class: 'empty' }, 'ما قدرت شغّل هالحلقة', h('button', { class: 'btn big', onclick: () => play(x, eps, ep) }, 'جرّب كمان مرة')), close); return; }
     skipAt = s.skip || (!x.mv ? [0, 85] : null);
@@ -681,10 +790,10 @@ function MTKKIDS() {
     const sl = h('button', { class: 'fsc', onclick: () => { sleepIdx = (sleepIdx + 1) % SLEEPS.length; setSleep(); sl.textContent = sleepLbl(); } }, sleepLbl());
     const ttl = h('div', { class: 'fst' }, x.t, x.mv ? '' : h('small', null, ep.t));
     fsBox.textContent = '';
-    fsBox.append(v, close, ttl, nx, pv, skipB, h('div', { class: 'fsbar' }, sp, sl));
+    fsBox.append(...[v, close, ttl, nx, pv, skipB, h('div', { class: 'fsbar' }, sp, sl)].filter(Boolean));
     showUI();
     const fail = () => { if (vid === v && fsOn && !v.currentTime) { const m = fsBox.querySelector('.ferr'); if (!m) fsBox.append(h('div', { class: 'ferr' }, 'ما قدرت شغّل الفيديو', h('button', { class: 'btn big', onclick: () => play(x, eps, ep) }, 'جرّب كمان مرة'))); } };
-    if (v.canPlayType('application/vnd.apple.mpegurl') && !/Android/i.test(navigator.userAgent)) { v.src = s.url; }
+    if (!/\.m3u8/i.test(s.url) || (v.canPlayType('application/vnd.apple.mpegurl') && !/Android/i.test(navigator.userAgent))) { v.src = s.url; }
     else {
       try {
         const Hls = await loadHls();

@@ -151,8 +151,24 @@ final class Doh {
             return new WebResourceResponse(mime, cs, code, msg, hs, res.body().byteStream());
         } catch (Exception e) {
             if (!main) return null;
-            String html = "<html><body style='background:#111;color:#fff;font:20px sans-serif;padding:30px' dir='rtl'><h2>ما قدرنا نوصل للموقع</h2><p dir='ltr' style='color:#f88'>" + android.text.TextUtils.htmlEncode(String.valueOf(e)) + "</p><p dir='ltr' style='color:#aaa'>DNS: " + android.text.TextUtils.htmlEncode(lastError) + "</p><p>XCONN KIDS " + "1.3.2" + "</p></body></html>";
+            String html = "<html><body style='background:#111;color:#fff;font:20px sans-serif;padding:30px' dir='rtl'><h2>ما قدرنا نوصل للموقع</h2><p dir='ltr' style='color:#f88'>" + android.text.TextUtils.htmlEncode(String.valueOf(e)) + "</p><p dir='ltr' style='color:#aaa'>DNS: " + android.text.TextUtils.htmlEncode(lastError) + "</p><p>XCONN KIDS " + "1.4" + "</p></body></html>";
             return new WebResourceResponse("text/html", "utf-8", new java.io.ByteArrayInputStream(html.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        }
+    }
+
+    static String finalUrl(String url, String headers) {
+        try {
+            Request.Builder b = new Request.Builder().url(url).header("Range", "bytes=0-0");
+            if (headers != null && !headers.isEmpty()) {
+                JSONObject h = new JSONObject(headers);
+                java.util.Iterator<String> it = h.keys();
+                while (it.hasNext()) { String k = it.next(); b.header(k, h.optString(k)); }
+            }
+            try (Response res = client.newCall(b.build()).execute()) {
+                return res.code() < 400 ? res.request().url().toString() : "";
+            }
+        } catch (Exception e) {
+            return "";
         }
     }
 

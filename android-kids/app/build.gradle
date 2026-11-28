@@ -7,8 +7,8 @@ android {
         applicationId 'com.mtk.kids'
         minSdk 26
         targetSdk 35
-        versionCode 6
-        versionName '1.3.2'
+        versionCode 7
+        versionName '1.4'
     }
     signingConfigs {
         release {
@@ -26,6 +26,7 @@ android {
     buildTypes {
         release {
             minifyEnabled false
+            debuggable System.getenv('MTK_DBG') != null
             if (System.getenv('MTK_KS')) signingConfig signingConfigs.release
         }
     }

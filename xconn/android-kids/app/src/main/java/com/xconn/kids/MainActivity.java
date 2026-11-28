@@ -40,6 +40,7 @@ import java.util.regex.Pattern;
 
 public class MainActivity extends Activity {
     private static final String HOME = "https://cartoony.net/";
+    private static final String SHELL = "<!doctype html><html lang=\"ar\" dir=\"rtl\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>XCONN KIDS</title></head><body style=\"background:#0B1026\"></body></html>";
     private static final String SCRIPT_URL = "https://abormze.github.io/MTK-MEDIA/xconn/xconn-kids.user.js";
     private static final Pattern AD_HOSTS = Pattern.compile(
             "(abscloud|araplhn|edwardspeedingchat|llvpn|sharethis|litix|yamli|recaptcha|rybbit|madurird|acscdn|aclib|cchud|d23uh58cc2jksn|adcash|doubleclick|googlesyndication|googleadservices|googletagservices|adservice|adnxs|popads|popcash|propellerads|"
@@ -524,6 +525,10 @@ public class MainActivity extends Activity {
             return new WebResourceResponse("text/plain", "utf-8", new ByteArrayInputStream(new byte[0]));
         }
         String path = u.getPath();
+        if (main && "GET".equals(method) && host != null && (host.endsWith("cartoony.net") || host.endsWith("carateen.tv"))
+                && (path == null || !path.startsWith("/api"))) {
+            return new WebResourceResponse("text/html", "utf-8", new ByteArrayInputStream(SHELL.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        }
         if (host != null && Doh.wanted(host) && path != null && path.matches("(?i)/(sw|registerSW|service-worker)\\.js")) {
             return new WebResourceResponse("text/javascript", "utf-8", 404, "Not Found", new HashMap<>(), new ByteArrayInputStream(new byte[0]));
         }
@@ -540,6 +545,15 @@ public class MainActivity extends Activity {
         public void req(String id, String url, String body, String headers) {
             new Thread(() -> {
                 String t = Doh.send(url, body, headers);
+                String js = "window.__mtkNet&&window.__mtkNet(" + org.json.JSONObject.quote(id) + "," + org.json.JSONObject.quote(t) + ")";
+                web.post(() -> web.evaluateJavascript(js, null));
+            }).start();
+        }
+
+        @android.webkit.JavascriptInterface
+        public void fin(String id, String url, String headers) {
+            new Thread(() -> {
+                String t = Doh.finalUrl(url, headers);
                 String js = "window.__mtkNet&&window.__mtkNet(" + org.json.JSONObject.quote(id) + "," + org.json.JSONObject.quote(t) + ")";
                 web.post(() -> web.evaluateJavascript(js, null));
             }).start();
