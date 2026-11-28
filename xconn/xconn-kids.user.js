@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         XCONN KIDS
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.3.0
+// @version      1.3.1
 // @description  XCONN KIDS - كرتون بدون إعلانات، تشغيل مباشر، ملفات شخصية، تابع المشاهدة
 // @author       XCONN
 // @match        *://cartoony.net/*
@@ -178,11 +178,16 @@ function MTKKIDS() {
   }
   async function all() {
     if (ALL) return ALL;
-    const [c, s, x] = await Promise.all([
+    const catLoad = async () => JSON.parse(await txt(CAT + '?h=' + Math.floor(Date.now() / 36e5))).src;
+    let [c, s, x] = await Promise.all([
       cached('c', '/api/tvshows', 3600e3).catch(() => []),
       cached('s', '/api/sp/tvshows', 3600e3).catch(() => []),
-      cached('x', '', 6 * 3600e3, async () => JSON.parse(await txt(CAT + '?h=' + Math.floor(Date.now() / 36e5))).src).catch(() => ({})),
+      cached('x', '', 6 * 3600e3, catLoad).catch(() => ({})),
     ]);
+    if (!x || !x.m) {
+      const nx = await tmo(catLoad(), 15000).catch(() => null);
+      if (nx && nx.m) { x = cache.x = nx; try { localStorage.setItem('mtk-c-x', JSON.stringify({ t: Date.now(), v: nx })); } catch (e) {} }
+    }
     const seen = {}, out = [];
     const push = (y) => {
       const n = dkey(y.t, y.mv);
