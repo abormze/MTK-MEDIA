@@ -1,10 +1,12 @@
 // ==UserScript==
 // @name         XCONN WWE
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.0.7
+// @version      1.0.8
 // @description  XCONN WWE - عروض المصارعة بدون إعلانات، مشاهدة الآن بأول سيرفر، ملفات وPIN، تابع المشاهدة، قائمتي
 // @match        *://shahed4u.here/*
 // @match        *://*.shahed4u.here/*
+// @match        *://shed4u.day/*
+// @match        *://*.shed4u.day/*
 // @run-at       document-start
 // @grant        none
 // @downloadURL  https://abormze.github.io/MTK-MEDIA/xconn/xconn-wwe.user.js
@@ -13,7 +15,7 @@
 (function MTKWWE() {
   'use strict';
   const W = window, D = document;
-  if (W.top !== W.self && !/shahed4u|google|doubleclick/i.test(location.hostname)) {
+  if (W.top !== W.self && !/(shahed|shahid|shed|shahd)4u|google|doubleclick/i.test(location.hostname)) {
     let n = 0, muted = false, tried = false;
     const t = setInterval(() => {
       if (++n > 80) return clearInterval(t);
@@ -33,7 +35,7 @@
     }, 500);
     return;
   }
-  if (!/shahed4u/i.test(location.hostname) || W.top !== W.self || W.__mtkOn) return;
+  if (!/(shahed|shahid|shed|shahd)4u/i.test(location.hostname) || W.top !== W.self || W.__mtkOn) return;
   W.__mtkOn = true;
   const CAT = '/category/%D8%B9%D8%B1%D9%88%D8%B6-%D9%85%D8%B5%D8%A7%D8%B1%D8%B9%D8%A9';
   const path = decodeURIComponent(location.pathname);

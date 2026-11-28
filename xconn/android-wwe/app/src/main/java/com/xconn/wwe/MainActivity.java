@@ -39,7 +39,9 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 public class MainActivity extends Activity {
-    private static final String HOME = "https://shahed4u.here/category/%D8%B9%D8%B1%D9%88%D8%B6-%D9%85%D8%B5%D8%A7%D8%B1%D8%B9%D8%A9";
+    private static final String CAT = "/category/%D8%B9%D8%B1%D9%88%D8%B6-%D9%85%D8%B5%D8%A7%D8%B1%D8%B9%D8%A9";
+    private static final Pattern SITE = Pattern.compile("(^|\\.)[a-z0-9-]*(shahed|shahid|shed|shahd)4u[a-z0-9-]*\\.[a-z]+$");
+    private static boolean isSite(String h) { return h != null && SITE.matcher(h.toLowerCase()).find(); }
     private static final String SCRIPT_URL = "https://abormze.github.io/MTK-MEDIA/xconn/xconn-wwe.user.js";
     private static final Pattern AD_HOSTS = Pattern.compile(
             "(abscloud|araplhn|edwardspeedingchat|llvpn|sharethis|litix|yamli|recaptcha|rybbit|madurird|acscdn|aclib|cchud|d23uh58cc2jksn|adcash|doubleclick|googlesyndication|googleadservices|googletagservices|adservice|adnxs|popads|popcash|propellerads|"
@@ -57,7 +59,7 @@ public class MainActivity extends Activity {
     private long lastUpd;
     private String script;
     private static final String HOSTS_URL = "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts";
-    private static final Pattern KEEP = Pattern.compile("(^|\\.)(shahed4u\\.here|fastvid\\.cam|earnvids\\.[a-z]+|pixibay\\.cc|willowgrovelearning\\.store|vinovo\\.[a-z]+|uqload\\.[a-z]+|jsdelivr\\.net|cloudflare\\.com|github\\.io|githubusercontent\\.com)$");
+    private static final Pattern KEEP = Pattern.compile("(^|\\.)([a-z0-9-]*(shahed|shahid|shed|shahd)4u[a-z0-9-]*\\.[a-z]+|fastvid\\.cam|earnvids\\.[a-z]+|pixibay\\.cc|willowgrovelearning\\.store|vinovo\\.[a-z]+|uqload\\.[a-z]+|jsdelivr\\.net|cloudflare\\.com|github\\.io|githubusercontent\\.com)$");
     private volatile Set<String> adHosts = new HashSet<>();
     private boolean tv;
     private volatile String nativeUrl;
@@ -227,11 +229,14 @@ public class MainActivity extends Activity {
                 String scheme = u.getScheme() == null ? "" : u.getScheme();
                 String host = u.getHost() == null ? "" : u.getHost();
                 if (!scheme.startsWith("http")) return true;
-                return !(host.contains("shahed4u") || host.contains("cloudflare") || host.contains("abormze.github.io"));
+                if (r.isRedirect() && isSite(Uri.parse(String.valueOf(v.getUrl())).getHost())) return false;
+                return !(isSite(host) || host.contains("cloudflare") || host.contains("abormze.github.io"));
             }
 
             @Override
             public void onPageStarted(WebView v, String url, android.graphics.Bitmap icon) {
+                String h = Uri.parse(url).getHost();
+                if (isSite(h) && !h.equals(site())) getSharedPreferences("mtk", MODE_PRIVATE).edit().putString("site", h).apply();
                 if (!docStart) v.evaluateJavascript(script, null);
             }
         });
@@ -280,7 +285,7 @@ public class MainActivity extends Activity {
         });
 
         if (state != null) web.restoreState(state);
-        else web.loadUrl(HOME);
+        else web.loadUrl("https://" + site() + CAT);
         updateScript();
         Updater.check(this, "https://abormze.github.io/MTK-MEDIA/xconn/wwe/version.json");
     }
@@ -290,6 +295,8 @@ public class MainActivity extends Activity {
         super.onNewIntent(i);
         Updater.handle(this, i);
     }
+
+    private String site() { return getSharedPreferences("mtk", MODE_PRIVATE).getString("site", "shed4u.day"); }
 
     private void immersive(boolean on) {
         View d = getWindow().getDecorView();
