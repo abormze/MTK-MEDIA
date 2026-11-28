@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         XCONN KIDS
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.2.0
+// @version      1.3.0
 // @description  XCONN KIDS - كرتون بدون إعلانات، تشغيل مباشر، ملفات شخصية، تابع المشاهدة
 // @author       XCONN
 // @match        *://cartoony.net/*
@@ -76,6 +76,7 @@ function MTKKIDS() {
   }
   const tmo = (p, ms) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error('timeout')), ms))]);
   const cache = {};
+  const DK0 = ['https://www.dimakids.com/', 'https://arabic-toons.com/'];
   async function cached(k, path, ttl, fn) {
     if (cache[k]) return cache[k];
     let c = null;
@@ -117,18 +118,64 @@ function MTKKIDS() {
       v: +s.views || 0, r: +s.rating || 0, n: +s.ep_count || 0, desc: (s.pref || '').trim(), age: +s.min_age || 0, on: true,
     };
   }
-  const SRCN = { d: 'دماكيدز', f: 'سبيس باور فان' };
+  const SRCN = { d: 'دماكيدز', f: 'سبيس باور فان', m: 'ماي سيما', t: 'كرتون تايم', e: 'إيجي ديد' };
   function fromX(s, i) {
     return {
-      k: s.k, id: String(s.id), t: s.t, u: s.u, mv: !!s.mv, cat: SRCN[s.k] || '', y: '',
-      img: s.img || '', hero: s.k === 'f' ? s.img || '' : '',
+      k: s.k, id: String(s.id), t: s.t, u: s.u, e: s.e, mv: !!s.mv, cat: SRCN[s.k] || '', y: s.y || '',
+      img: s.img || '', hero: s.hero || (s.k === 'f' ? s.img || '' : ''),
       g: (s.g && s.g.length ? s.g : [s.mv ? 'أفلام' : 'كرتون']).map(normG),
       v: Math.max(1, 600 - i), r: 0, n: 0, desc: s.desc || '', age: s.age || 7, on: true,
     };
   }
-  const CAT = 'https://abormze.github.io/MTK-MEDIA/xconn/kids/cat.json';
+  const CAT = 'https://abormze.github.io/MTK-MEDIA/kids/cat.json';
   const arr = (a) => (Array.isArray(a) ? a : []);
   let ALL = null;
+  const XK = ['f', 'd', 'm', 't', 'e'];
+  const DKW = /مشاهده|فيلم|افلام|كرتون|انمي|مدبلجه|مدبلج|مترجمه|مترجم|بالعربيه|بالعربي|اون لاين|اونلاين|كامل|مباشره|ماي سيما|مصري|الجزء|\bthe\b|\bhd\b|\b(19|20)\d\d\b|[^\w\u0600-\u06ff ]/g;
+  const AR_N = { 'الاول': 1, 'الثاني': 2, 'الثالث': 3, 'الرابع': 4, 'الخامس': 5 };
+  function dkey(t, mv) {
+    let s = norm(t).replace(/[_\-–:]/g, ' ').replace(DKW, ' ');
+    for (const w in AR_N) s = s.replace(new RegExp('\\b' + w + '\\b|(^|\\s)' + w + '(?=\\s|$)', 'g'), ' ' + AR_N[w] + ' ');
+    s = s.replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/\s+/g, ' ').replace(/\b(\d+) \1\b/g, '$1').trim();
+    const lat = s.replace(/[\u0600-\u06ff]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const k = /[a-z]{3}/.test(lat) ? lat : s.replace(/ /g, '');
+    return k ? (mv ? 'm:' : 's:') + k.replace(/ /g, '') : '';
+  }
+  /* per-source health: a source that stops answering is hidden, re-probed, and restored when it answers again */
+  const SITE = { c: ['https://cartoony.net/'], s: ['https://cartoony.net/'], d: DK0, f: ['https://spacepowerfan.com/'], m: ['https://cima.my-cima.net/'], t: ['https://cartoontime.net/'], e: ['https://egydead.ca/'] };
+  const HK = 'mtk-down';
+  const down = (() => { try { return JSON.parse(localStorage.getItem(HK)) || {}; } catch (e) { return {}; } })();
+  const isDown = (k) => !!down[k] && Object.keys(SITE).some((j) => !down[j]);
+  const live = (x) => !isDown(x.k) || (x.alt || []).some((a) => !isDown(a.k));
+  async function probe(k) {
+    for (const u of SITE[k]) {
+      try { const t = await tmo(txt(u, { referer: u }), 12000); if (t && t.length > 200) return true; } catch (e) {}
+    }
+    return false;
+  }
+  let probing = false, probeT = 0;
+  async function probeAll() {
+    if (probing) return;
+    probing = true;
+    clearTimeout(probeT);
+    let changed = false;
+    try {
+      const ks = Object.keys(SITE).filter((k) => k !== 's');
+      const r = await Promise.all(ks.map((k) => probe(k).catch(() => false)));
+      if (!r.some(Boolean)) return;
+      ks.forEach((k, i) => {
+        const was = !!down[k];
+        if (r[i]) delete down[k]; else down[k] = Date.now();
+        if (k === 'c') { if (r[i]) delete down.s; else down.s = down.c; }
+        if (was !== !r[i]) changed = true;
+      });
+      try { localStorage.setItem(HK, JSON.stringify(down)); } catch (e) {}
+    } finally {
+      probing = false;
+      probeT = setTimeout(probeAll, Object.keys(down).length ? 120e3 : 600e3);
+      if (changed && typeof onHealth === 'function') onHealth();
+    }
+  }
   async function all() {
     if (ALL) return ALL;
     const [c, s, x] = await Promise.all([
@@ -138,21 +185,22 @@ function MTKKIDS() {
     ]);
     const seen = {}, out = [];
     const push = (y) => {
-      const n = norm(y.t).replace(/\s*(مدبلج|بالعربي|بالعربية|كامل)\s*/g, ' ').replace(/\s+/g, ' ').trim();
-      const ex = seen[n];
-      if (ex) { (ex.alt = ex.alt || []).push(y); return; }
-      seen[n] = y; out.push(y);
+      const n = dkey(y.t, y.mv);
+      const ex = n && seen[n];
+      if (ex) { if (ex.k !== y.k || ex.id !== y.id) (ex.alt = ex.alt || []).push(y); return; }
+      if (n) seen[n] = y; out.push(y);
     };
     arr(c).map(fromC).concat(arr(s).map(fromS)).filter((y) => y.on && y.t).forEach(push);
-    ['f', 'd'].forEach((k) => arr(x && x[k]).forEach((y, i) => y && y.t && push(fromX(y, i))));
+    XK.forEach((k) => arr(x && x[k]).forEach((y, i) => y && y.t && push(fromX(y, i))));
     if (!out.length) throw new Error('empty');
+    probeAll();
     return (ALL = out);
   }
-  const vis = (list) => (kids() ? list.filter((x) => x.age <= 7) : list);
-  const PRE = { s: 'sp/', d: 'dk/', f: 'sf/' }, PREK = { sp: 's', dk: 'd', sf: 'f' };
+  const vis = (list) => list.filter((x) => (!kids() || x.age <= 7) && live(x));
+  const PRE = { s: 'sp/', d: 'dk/', f: 'sf/', m: 'mc/', t: 'ct/', e: 'ed/' }, PREK = { sp: 's', dk: 'd', sf: 'f', mc: 'm', ct: 't', ed: 'e' };
   const showHref = (x) => '/watch/' + (PRE[x.k] || '') + x.id;
   const findShow = async (k, id) => (await all()).find((x) => x.k === k && x.id === String(id));
-  const DK = ['https://www.dimakids.com/', 'https://arabic-toons.com/'];
+  const DK = DK0;
   async function page(urls) {
     for (const u of urls) {
       try {
@@ -163,6 +211,7 @@ function MTKKIDS() {
     throw new Error('down');
   }
   async function episodes(x) {
+    if (x.e) return [{ id: '1', n: 1, t: x.t, img: x.img, d: 0 }];
     if (x.k === 'd') {
       if (/movies-streaming/.test(x.u)) return [{ id: x.id, n: 1, t: x.t, img: x.img, d: 0, u: x.u }];
       return cached('de' + x.id, '', 1800e3, async () => {
@@ -193,17 +242,58 @@ function MTKKIDS() {
   }
   const anon = () => { let a = localStorage.getItem('mtk-anon'); if (!a) { a = 'anon_' + Math.random().toString(36).slice(2, 13) + '_' + Date.now().toString(36); localStorage.setItem('mtk-anon', a); } return a; };
   async function streamAny(x, ep) {
-    try { const s = await tmo(stream(x, ep), 20000); if (s && s.url) return s; } catch (e) {}
-    for (const a of x.alt || []) {
+    if (!isDown(x.k)) try { const s = await tmo(stream(x, ep), x.e ? 45000 : 20000); if (s && s.url) return s; } catch (e) {}
+    for (const a of (x.alt || []).slice().sort((p, q) => isDown(p.k) - isDown(q.k))) {
       try {
         const l = await episodes(a);
         const e2 = l.find((e) => e.n === ep.n) || (l.length === 1 ? l[0] : null);
-        if (e2) { const s = await tmo(stream(a, e2), 20000); if (s && s.url) return s; }
+        if (e2) { const s = await tmo(stream(a, e2), a.e ? 45000 : 20000); if (s && s.url) return s; }
       } catch (e) {}
     }
     return null;
   }
+  function unpack(src) {
+    const out = [];
+    const re = /\}\('((?:[^'\\]|\\.)*)',\s*(\d+),\s*(\d+),\s*'((?:[^'\\]|\\.)*)'\.split\('\|'\)/g;
+    let m;
+    while ((m = re.exec(src))) {
+      let p = m[1]; const a = +m[2], k = m[4].split('|');
+      const b = (n) => (n >= a ? b(Math.floor(n / a)) : '') + '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'[n % a];
+      p = p.replace(/\b\w+\b/g, (w) => { const i = parseInt(w, a); return w === b(i) && k[i] ? k[i] : w; });
+      out.push(p);
+    }
+    return out.join('\n');
+  }
+  const MEDIA = /https?:\/\/[^"'\s<>]+?\.(?:m3u8|mp4)(?:\?[^"'\s<>]*)?/i;
+  async function resolveEmbed(u, ref) {
+    const hd = { referer: ref };
+    if (/odysee\.com/.test(u)) {
+      const c = decodeURIComponent(u.split('/$/embed/')[1] || '').split('?')[0];
+      if (!c) return '';
+      const t = await new Promise((res) => { const id = 'n' + (++netId); netCb[id] = res; window.MTKNet ? window.MTKNet.req(id, 'https://api.na-backend.odysee.com/api/v1/proxy?m=get', JSON.stringify({ jsonrpc: '2.0', method: 'get', params: { uri: 'lbry://' + c.replace(/:/g, '#'), save_file: false } }), JSON.stringify({ 'content-type': 'application/json' })) : res(''); });
+      try { return JSON.parse(t).result.streaming_url || ''; } catch (e) { return ''; }
+    }
+    const t = await tmo(txt(u, hd), 15000);
+    if (!t) return '';
+    if (/ok\.ru/.test(u)) {
+      const o = (t.match(/data-options="([^"]+)"/) || [])[1];
+      if (!o) return '';
+      const d = new DOMParser().parseFromString('<i>' + o + '</i>', 'text/html').body.textContent;
+      const md = JSON.parse(JSON.parse(d).flashvars.metadata);
+      return md.hlsManifestUrl || md.ondemandHls || ((md.videos || []).slice(-1)[0] || {}).url || '';
+    }
+    const all = t + '\n' + unpack(t);
+    const m = all.match(/(?:file|src|source)\s*:\s*["'](https?:[^"']+?\.m3u8[^"']*)/i) || all.match(MEDIA);
+    return m ? (m[1] || m[0]).replace(/\\\//g, '/') : '';
+  }
   async function stream(x, ep) {
+    if (x.e) {
+      const ref = SITE[x.k][0];
+      for (const u of x.e) {
+        try { const r = await tmo(resolveEmbed(u, ref), 16000); if (r) return { url: r, skip: null }; } catch (e) {}
+      }
+      return { url: '', skip: null };
+    }
     if (x.k === 'd') {
       const { t } = await page(DK.map((b) => b + ep.u));
       const m = t.match(/videoSrc\s*=\s*["']([^"']+)/);
@@ -412,6 +502,7 @@ function MTKKIDS() {
     go(u.pathname + u.search, false);
   }, true);
   W.addEventListener('popstate', () => { if (fsOn) closeFS(); route(); });
+  var onHealth = () => { if (!fsOn && !/^\/watch\//.test(location.pathname)) route(); };
   function go(u, replace) {
     if (fsOn) closeFS();
     history[replace ? 'replaceState' : 'pushState'](null, '', u);
@@ -434,12 +525,15 @@ function MTKKIDS() {
       if (p === '/mtk/series') return browse((x) => !x.mv && (x.k === 'c' || x.k === 'f'), 'مسلسلات');
       if (p === '/mtk/dk') return browse((x) => x.k === 'd', 'دماكيدز');
       if (p === '/mtk/sf') return browse((x) => x.k === 'f', 'سبيس باور فان');
+      if (p === '/mtk/mc') return browse((x) => x.k === 'm', 'ماي سيما');
+      if (p === '/mtk/ct') return browse((x) => x.k === 't', 'كرتون تايم');
+      if (p === '/mtk/ed') return browse((x) => x.k === 'e', 'أفلام أنمي عالمية');
       if (p === '/mtk/movies') return browse((x) => x.mv, 'أفلام');
       if (p === '/mtk/sp') return browse((x) => x.k === 's', 'سبيستون', true);
       if (p === '/mtk/list') return listPage();
       if (p === '/mtk/search') return searchPage();
       if (p === '/mtk/g') return genrePage();
-      if ((m = p.match(/^\/watch\/(?:(sp|dk|sf)\/)?(\d+)(?:\/([^/]+))?$/))) return detail(m[1] ? PREK[m[1]] : 'c', m[2], m[3], tok);
+      if ((m = p.match(/^\/watch\/(?:(sp|dk|sf|mc|ct|ed)\/)?([\w-]+)(?:\/([^/]+))?$/))) return detail(m[1] ? PREK[m[1]] : 'c', m[2], m[3], tok);
       return home();
     } catch (e) {
       if (tok !== navToken) return;
@@ -531,6 +625,9 @@ function MTKKIDS() {
     add(rowEl('أعلى 10 أفلام', L.filter((x) => x.mv).sort((a, b) => b.v - a.v).slice(0, 10), { num: 1, cls: 'top10' }));
     tg.forEach((g) => add(rowEl('لأنك بتحب ' + g, shuffle(byG(L, g).filter((x) => !seen.has(sk(x))), day + 1).slice(0, 20), { more: gl(g) })));
     const G = kids() ? ['بون بون', 'زمردة', 'مغامرات', 'كوميدي', 'علوم', 'أبجد', 'سبيستون مام'] : ['مغامرات', 'أكشن', 'كوميدي', 'خيال علمي', 'رياضة', 'زمردة', 'بون بون', 'سبيس باور', 'شارع الأنمي', 'دراما', 'تاريخي', 'خيال', 'ميكا'];
+    add(rowEl('أفلام ديزني وكرتون', L.filter((x) => x.k === 'm').slice(0, 24), { more: '/mtk/mc' }));
+    add(rowEl('كرتون تايم', L.filter((x) => x.k === 't').slice(0, 24), { more: '/mtk/ct' }));
+    add(rowEl('أفلام أنمي عالمية', L.filter((x) => x.k === 'e').slice(0, 24), { more: '/mtk/ed' }));
     add(rowEl('سبيس باور فان', L.filter((x) => x.k === 'f').slice(0, 24), { more: '/mtk/sf' }));
     add(rowEl('كرتون دماكيدز', L.filter((x) => x.k === 'd' && !x.mv).slice(0, 24), { more: '/mtk/dk' }));
     add(rowEl('أفلام دماكيدز', L.filter((x) => x.k === 'd' && x.mv).slice(0, 24), { more: '/mtk/dk' }));
