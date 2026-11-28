@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         XCONN KIDS
 // @namespace    https://abormze.github.io/MTK-MEDIA
-// @version      1.3.2
+// @version      1.3.3
 // @description  XCONN KIDS - كرتون بدون إعلانات، تشغيل مباشر، ملفات شخصية، تابع المشاهدة
 // @author       XCONN
 // @match        *://cartoony.net/*
@@ -204,7 +204,7 @@ function MTKKIDS() {
   const vis = (list) => list.filter((x) => (!kids() || x.age <= 7) && live(x));
   const PRE = { s: 'sp/', d: 'dk/', f: 'sf/', m: 'mc/', t: 'ct/', e: 'ed/' }, PREK = { sp: 's', dk: 'd', sf: 'f', mc: 'm', ct: 't', ed: 'e' };
   const showHref = (x) => '/watch/' + (PRE[x.k] || '') + x.id;
-  const findShow = async (k, id) => (await all()).find((x) => x.k === k && x.id === String(id));
+  const findShow = async (k, id) => { const L = await all(), m = (x) => x.k === k && x.id === String(id); return L.find(m) || L.find((x) => (x.alt || []).some(m)); };
   const DK = DK0;
   async function page(urls) {
     for (const u of urls) {
